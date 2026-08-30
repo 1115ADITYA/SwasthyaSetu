@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  ASHA
+  DOCTOR
+  ADMIN
+}
+
+model User {
+  id             String          @id @default(uuid())
+  phoneNumber    String          @unique
+  passwordHash   String
+  role           Role            @default(PATIENT)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  patientProfile PatientProfile?
+  facilityId     String?
+  facility       Facility?       @relation(fields: [facilityId], references: [id])
+}
+
+model Facility {
+  id          String   @id @default(uuid())
+  name        String
+  type        String   // PHC, SUB_CENTRE, DISTRICT_HOSPITAL
+  location    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  patients    PatientProfile[]
+}
+
+model PatientProfile {
+  id          String   @id @default(uuid())
+  userId      String?  @unique
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime
+  gender      String
+  abhaId      String?  @unique
+  
+  facilityId  String
+  facility    Facility @relation(fields: [facilityId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
