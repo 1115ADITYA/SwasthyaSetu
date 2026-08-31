@@ -7,6 +7,10 @@ export type AuthStackParamList = {
 export type AppStackParamList = {
   Dashboard: undefined;
   PatientSearch: undefined;
+  PatientRegistration: undefined;
+  PatientDetails: { patientId: string };
+  CaptureVisit: { patientId: string; patientName: string };
+  SyncStatus: undefined;
 };
 
 export type RootStackParamList = {

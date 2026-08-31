@@ -6,16 +6,16 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Watch all files within the monorepo
-config.watchFolders = [workspaceRoot];
+// Watch packages directory in monorepo for shared code
+config.watchFolders = [
+  projectRoot,
+  path.resolve(workspaceRoot, 'packages'),
+];
 
-// Let Metro know where to resolve packages and in what order
+// Let Metro know where to resolve packages
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
-
-// Ensure symlinks / workspace packages are resolved correctly
-config.resolver.disableHierarchicalLookup = false;
 
 module.exports = config;
