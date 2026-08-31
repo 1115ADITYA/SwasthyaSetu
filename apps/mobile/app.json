@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "SwasthyaSetu Mobile",
+    "slug": "swasthyasetu-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0284c7"
+    },
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.swasthyasetu.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0284c7"
+      },
+      "package": "com.swasthyasetu.mobile"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
