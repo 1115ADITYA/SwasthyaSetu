@@ -9,12 +9,13 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { AppStackParamList } from '../../types';
+import { AppStackParamList, Patient, Visit } from '../../types';
 import { Button, Card, Header, SyncBadge } from '../../components';
 import { colors } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
 import { useSyncStore } from '../../store/syncStore';
-import { getTodayVisitsCount } from '../../db/visits.repo';
+import { getTodayVisitsCount, getVisitsByPatientId } from '../../db/visits.repo';
+import { getAllLocalPatients } from '../../db/patients.repo';
 import { processSyncQueue } from '../../sync/syncEngine';
 import { ENV } from '../../config/env';
 
@@ -22,6 +23,7 @@ type Props = NativeStackScreenProps<AppStackParamList, 'Dashboard'>;
 
 export const AshaDashboardScreen: React.FC<Props> = ({ navigation }) => {
   const [todayCount, setTodayCount] = useState(0);
+  const [recentPatients, setRecentPatients] = useState<Patient[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const { phoneNumber, role, logout } = useAuthStore();
@@ -31,6 +33,8 @@ export const AshaDashboardScreen: React.FC<Props> = ({ navigation }) => {
     try {
       const count = await getTodayVisitsCount();
       setTodayCount(count);
+      const allPatients = await getAllLocalPatients();
+      setRecentPatients(allPatients.slice(0, 3));
       await refreshPendingCount();
     } catch (e) {
       console.error('[Dashboard] Error loading stats:', e);
@@ -38,8 +42,12 @@ export const AshaDashboardScreen: React.FC<Props> = ({ navigation }) => {
   }, [refreshPendingCount]);
 
   useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadDashboardData();
+    });
     loadDashboardData();
-  }, [loadDashboardData]);
+    return unsubscribe;
+  }, [navigation, loadDashboardData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -73,6 +81,19 @@ export const AshaDashboardScreen: React.FC<Props> = ({ navigation }) => {
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* Offline Banner when disconnected */}
+        {!isOnline ? (
+          <View style={styles.offlineAlert}>
+            <Text style={styles.offlineAlertIcon}>📡</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.offlineAlertTitle}>Working in Offline Field Mode</Text>
+              <Text style={styles.offlineAlertText}>
+                All visits and patient registrations are saved securely on device and will sync automatically when internet is available.
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         {/* Worker Info Card */}
         <Card style={styles.workerCard}>
           <View style={styles.workerHeader}>
@@ -148,7 +169,7 @@ export const AshaDashboardScreen: React.FC<Props> = ({ navigation }) => {
           </Card>
         ) : null}
 
-        {/* Action Buttons */}
+        {/* Field Actions */}
         <Text style={styles.sectionHeading}>Field Actions</Text>
 
         <TouchableOpacity
@@ -202,6 +223,44 @@ export const AshaDashboardScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.actionArrow}>›</Text>
         </TouchableOpacity>
 
+        {/* Recent Patients */}
+        {recentPatients.length > 0 ? (
+          <View style={styles.recentSection}>
+            <View style={styles.recentHeader}>
+              <Text style={styles.sectionHeading}>Recent Patients</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('PatientSearch')}>
+                <Text style={styles.viewAllText}>View All ›</Text>
+              </TouchableOpacity>
+            </View>
+
+            {recentPatients.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('PatientDetails', { patientId: p.id })}
+              >
+                <Card style={styles.recentPatientCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.recentPatientName}>
+                      {p.firstName} {p.lastName}
+                    </Text>
+                    <Text style={styles.recentPatientSub}>
+                      {p.gender} • DOB: {p.dateOfBirth}
+                    </Text>
+                  </View>
+                  {p.isLocalOnly ? (
+                    <View style={styles.recentLocalBadge}>
+                      <Text style={styles.recentLocalBadgeText}>Local</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.recentActionText}>Open ›</Text>
+                  )}
+                </Card>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+
         {/* Sign Out */}
         <Button
           title="Sign Out"
@@ -241,6 +300,31 @@ const styles = StyleSheet.create({
   container: {
     padding: 18,
     paddingBottom: 40,
+  },
+  offlineAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 10,
+  },
+  offlineAlertIcon: {
+    fontSize: 22,
+  },
+  offlineAlertTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e40af',
+    marginBottom: 2,
+  },
+  offlineAlertText: {
+    fontSize: 11,
+    color: '#3b82f6',
+    lineHeight: 15,
   },
   workerCard: {
     padding: 16,
@@ -399,6 +483,56 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  recentSection: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  viewAllText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  recentPatientCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    marginBottom: 8,
+  },
+  recentPatientName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  recentPatientSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  recentLocalBadge: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  recentLocalBadgeText: {
+    fontSize: 10,
+    color: '#92400e',
+    fontWeight: '600',
+  },
+  recentActionText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
   },
   logoutButton: {
     marginTop: 16,

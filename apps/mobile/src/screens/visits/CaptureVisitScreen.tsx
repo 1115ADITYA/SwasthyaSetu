@@ -26,7 +26,11 @@ const PRESET_SYMPTOMS = [
   'Headache',
   'Body Ache',
   'Diarrhea',
+  'Vomiting',
   'Chest Pain',
+  'Abdominal Pain',
+  'Skin Rash',
+  'Joint Pain',
   'Fatigue',
 ];
 
@@ -85,8 +89,38 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
     setSymptoms(symptoms.filter((_, idx) => idx !== index));
   };
 
+  // Clinical helper status
+  const getBPStatus = () => {
+    const sys = parseInt(systolic, 10);
+    const dia = parseInt(diastolic, 10);
+    if (!sys || !dia) return null;
+    if (sys >= 140 || dia >= 90) return { label: '⚠️ High BP (Stage 2)', color: colors.danger };
+    if (sys >= 130 || dia >= 80) return { label: '⚠️ Elevated BP (Stage 1)', color: colors.accent };
+    if (sys < 90 || dia < 60) return { label: '⚠️ Low BP (Hypotension)', color: colors.accent };
+    return { label: '✓ Normal BP', color: colors.success };
+  };
+
+  const getSpO2Status = () => {
+    const val = parseInt(spO2, 10);
+    if (!val) return null;
+    if (val < 90) return { label: '🚨 Critical Hypoxia (<90%)', color: colors.danger };
+    if (val < 95) return { label: '⚠️ Low Oxygen Level (<95%)', color: colors.accent };
+    return { label: '✓ Normal SpO2', color: colors.success };
+  };
+
+  const getTempStatus = () => {
+    const val = parseFloat(temp);
+    if (!val) return null;
+    if (val >= 102) return { label: '🚨 High Fever (≥102°F)', color: colors.danger };
+    if (val > 99) return { label: '⚠️ Mild Fever (>99°F)', color: colors.accent };
+    return { label: '✓ Normal Temp', color: colors.success };
+  };
+
+  const bpStatus = getBPStatus();
+  const spo2Status = getSpO2Status();
+  const tempStatus = getTempStatus();
+
   const handleSubmitVisit = async () => {
-    // Validate clinical ranges
     const numTemp = parseFloat(temp);
     const numSys = parseInt(systolic, 10);
     const numDia = parseInt(diastolic, 10);
@@ -175,7 +209,14 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
 
           {/* Section 1: Vitals */}
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>1. Clinical Vitals</Text>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitle}>1. Clinical Vitals</Text>
+              {bpStatus ? (
+                <Text style={[styles.vitalStatusHint, { color: bpStatus.color }]}>
+                  {bpStatus.label}
+                </Text>
+              ) : null}
+            </View>
 
             <View style={styles.row}>
               <Input
@@ -214,6 +255,11 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
                 containerStyle={styles.halfCol}
               />
             </View>
+            {spo2Status ? (
+              <Text style={[styles.statusFeedback, { color: spo2Status.color }]}>
+                {spo2Status.label}
+              </Text>
+            ) : null}
 
             <View style={styles.row}>
               <Input
@@ -233,6 +279,11 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
                 containerStyle={styles.halfCol}
               />
             </View>
+            {tempStatus ? (
+              <Text style={[styles.statusFeedback, { color: tempStatus.color }]}>
+                {tempStatus.label}
+              </Text>
+            ) : null}
 
             <Input
               label="Weight (kg)"
@@ -247,7 +298,7 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>2. Symptoms Assessment</Text>
 
-            <Text style={styles.subLabel}>Quick Add Symptoms:</Text>
+            <Text style={styles.subLabel}>Quick Add Common Symptoms:</Text>
             <View style={styles.presetChips}>
               {PRESET_SYMPTOMS.map((name) => (
                 <TouchableOpacity
@@ -298,10 +349,10 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
 
           {/* Section 3: Notes */}
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>3. Field Worker Notes</Text>
+            <Text style={styles.sectionTitle}>3. Field Worker Notes & Referral</Text>
             <Input
               label="Observations / Advice Given"
-              placeholder="Enter any guidance provided or referral recommendations..."
+              placeholder="Enter guidance provided, medicine reminders, or PHC referral advice..."
               multiline
               numberOfLines={3}
               value={notes}
@@ -378,11 +429,26 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 14,
   },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 12,
+  },
+  vitalStatusHint: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statusFeedback: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: -8,
+    marginBottom: 10,
   },
   row: {
     flexDirection: 'row',

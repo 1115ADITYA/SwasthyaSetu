@@ -18,9 +18,11 @@ import { searchPatientsApi, getPatientsApi } from '../../api/patients.api';
 import { useSyncStore } from '../../store/syncStore';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PatientSearch'>;
+type FilterTab = 'ALL' | 'LOCAL_ONLY' | 'SYNCED';
 
 export const PatientSearchScreen: React.FC<Props> = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSearchingOnline, setIsSearchingOnline] = useState(false);
@@ -80,6 +82,12 @@ export const PatientSearchScreen: React.FC<Props> = ({ navigation }) => {
     loadPatients(searchQuery);
   }, [loadPatients, searchQuery]);
 
+  const filteredPatients = patients.filter((p) => {
+    if (activeTab === 'LOCAL_ONLY') return p.isLocalOnly;
+    if (activeTab === 'SYNCED') return !p.isLocalOnly;
+    return true;
+  });
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.topHeader}>
@@ -104,17 +112,55 @@ export const PatientSearchScreen: React.FC<Props> = ({ navigation }) => {
         ) : null}
       </View>
 
-      <View style={styles.resultsInfoRow}>
-        <Text style={styles.resultsCountText}>
-          {patients.length} {patients.length === 1 ? 'patient' : 'patients'} found
-        </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('PatientRegistration')}>
-          <Text style={styles.registerLinkText}>+ Register New</Text>
+      {/* Filter Tabs */}
+      <View style={styles.filterTabsRow}>
+        <TouchableOpacity
+          onPress={() => setActiveTab('ALL')}
+          style={[styles.filterTab, activeTab === 'ALL' && styles.filterTabActive]}
+        >
+          <Text style={[styles.filterTabText, activeTab === 'ALL' && styles.filterTabTextActive]}>
+            All ({patients.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setActiveTab('LOCAL_ONLY')}
+          style={[styles.filterTab, activeTab === 'LOCAL_ONLY' && styles.filterTabActive]}
+        >
+          <Text
+            style={[
+              styles.filterTabText,
+              activeTab === 'LOCAL_ONLY' && styles.filterTabTextActive,
+            ]}
+          >
+            Local ({patients.filter((p) => p.isLocalOnly).length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setActiveTab('SYNCED')}
+          style={[styles.filterTab, activeTab === 'SYNCED' && styles.filterTabActive]}
+        >
+          <Text
+            style={[
+              styles.filterTabText,
+              activeTab === 'SYNCED' && styles.filterTabTextActive,
+            ]}
+          >
+            Synced ({patients.filter((p) => !p.isLocalOnly).length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.registerLinkButton}
+          onPress={() => navigation.navigate('PatientRegistration')}
+        >
+          <Text style={styles.registerLinkText}>+ Register</Text>
         </TouchableOpacity>
       </View>
 
       <FlatList
-        data={patients}
+        data={filteredPatients}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         renderItem={({ item }) => (
@@ -131,6 +177,8 @@ export const PatientSearchScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={styles.emptySubtitle}>
                 {searchQuery
                   ? `No matches for "${searchQuery}". You can register this citizen directly.`
+                  : activeTab === 'LOCAL_ONLY'
+                  ? 'No offline-created patients currently pending sync.'
                   : 'No patients in local storage yet. Register a patient to get started.'}
               </Text>
               <Button
@@ -180,7 +228,8 @@ const styles = StyleSheet.create({
   },
   searchBarContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
     backgroundColor: colors.surface,
     position: 'relative',
   },
@@ -199,17 +248,41 @@ const styles = StyleSheet.create({
     right: 28,
     top: 22,
   },
-  resultsInfoRow: {
+  filterTabsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: 8,
   },
-  resultsCountText: {
+  filterTab: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterTabActive: {
+    backgroundColor: colors.primaryLight,
+    borderColor: '#bae6fd',
+  },
+  filterTabText: {
     fontSize: 12,
     color: colors.textSecondary,
     fontWeight: '500',
+  },
+  filterTabTextActive: {
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
+  registerLinkButton: {
+    marginLeft: 'auto',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
   },
   registerLinkText: {
     fontSize: 13,
@@ -218,6 +291,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 30,
   },
   emptyState: {

@@ -15,7 +15,7 @@ import { AppStackParamList, SyncQueueItem } from '../../types';
 import { Button, Card, Header, SyncBadge } from '../../components';
 import { colors } from '../../theme';
 import { useSyncStore } from '../../store/syncStore';
-import { getAllQueueItems } from '../../db/syncQueue.repo';
+import { getAllQueueItems, removeQueueItem } from '../../db/syncQueue.repo';
 import { processSyncQueue } from '../../sync/syncEngine';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'SyncStatus'>;
@@ -49,6 +49,20 @@ export const SyncStatusScreen: React.FC<Props> = ({ navigation }) => {
     }
     await processSyncQueue();
     await loadQueue();
+  };
+
+  const handleClearItem = async (clientSyncId: string) => {
+    Alert.alert('Remove Queue Item', 'Are you sure you want to discard this sync item?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          await removeQueueItem(clientSyncId);
+          await loadQueue();
+        },
+      },
+    ]);
   };
 
   const getStatusBadge = (status: string) => {
@@ -162,6 +176,12 @@ export const SyncStatusScreen: React.FC<Props> = ({ navigation }) => {
                 {item.errorMessage ? (
                   <Text style={styles.itemError}>Error: {item.errorMessage}</Text>
                 ) : null}
+
+                <View style={styles.itemActionsRow}>
+                  <TouchableOpacity onPress={() => handleClearItem(item.clientSyncId)}>
+                    <Text style={styles.discardText}>Discard Item</Text>
+                  </TouchableOpacity>
+                </View>
               </Card>
             );
           }}
@@ -325,6 +345,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.danger,
     marginTop: 4,
+  },
+  itemActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 6,
+  },
+  discardText: {
+    fontSize: 12,
+    color: colors.danger,
+    fontWeight: '600',
   },
   emptyQueue: {
     padding: 24,
