@@ -36,7 +36,7 @@ export interface CreateVisitResponse {
 
 export interface SyncItem {
   clientSyncId: string;
-  operation: string;
+  operation: 'CREATE_VISIT' | 'REGISTER_PATIENT' | string;
   entityType: string;
   entityId?: string;
   payload: any;

@@ -22,10 +22,20 @@ const symptomSchema = z.object({
 
 const syncItemSchema = z.object({
   clientSyncId: z.string().uuid(),
-  operation: z.enum(['CREATE_VISIT']),
+  operation: z.enum(['CREATE_VISIT', 'REGISTER_PATIENT']),
   entityType: z.string(),
   entityId: z.string().optional(),
   payload: z.any(),
+});
+
+const registerPatientPayloadSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  dateOfBirth: z.string().refine((date) => !isNaN(Date.parse(date)), { message: "Invalid date" }),
+  gender: z.string(),
+  abhaId: z.string().optional(),
+  facilityId: z.string(),
+  userId: z.string().optional(),
 });
 
 const syncRequestSchema = z.object({
@@ -106,6 +116,44 @@ export const syncData = async (req: Request, res: Response) => {
               clientSyncId: item.clientSyncId,
               status: 'success',
               serverEntityId: visit.id
+            });
+          } else if (item.operation === 'REGISTER_PATIENT') {
+            const payloadValidation = registerPatientPayloadSchema.safeParse(item.payload);
+            if (!payloadValidation.success) {
+              throw new Error(`Invalid payload for REGISTER_PATIENT: ${JSON.stringify(payloadValidation.error.flatten())}`);
+            }
+
+            const { firstName, lastName, dateOfBirth, gender, abhaId, facilityId, userId } = payloadValidation.data;
+
+            const patient = await tx.patientProfile.create({
+              data: {
+                id: item.entityId, // Use client generated ID if provided
+                firstName,
+                lastName,
+                dateOfBirth: new Date(dateOfBirth),
+                gender,
+                abhaId,
+                facilityId,
+                userId: userId || undefined,
+              },
+            });
+
+            // 3. Create Sync Receipt
+            await tx.syncReceipt.create({
+              data: {
+                clientSyncId: item.clientSyncId,
+                userId: user.userId,
+                operation: item.operation,
+                entityType: item.entityType,
+                entityId: patient.id,
+                status: 'SUCCESS'
+              }
+            });
+
+            results.push({
+              clientSyncId: item.clientSyncId,
+              status: 'success',
+              serverEntityId: patient.id
             });
           } else {
             throw new Error(`Unsupported operation: ${item.operation}`);
