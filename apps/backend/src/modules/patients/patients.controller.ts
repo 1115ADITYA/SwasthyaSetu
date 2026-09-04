@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../../core/db/prisma';
 
 const patientSchema = z.object({
+  id: z.string().uuid().optional(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   dateOfBirth: z.string().refine((date) => !isNaN(Date.parse(date)), { message: "Invalid date" }),
@@ -20,10 +21,22 @@ export const createPatient = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Validation error', errors: validation.error.flatten() });
     }
 
-    const { firstName, lastName, dateOfBirth, gender, abhaId, facilityId, userId } = validation.data;
+    const { id, firstName, lastName, dateOfBirth, gender, abhaId, facilityId, userId } = validation.data;
+
+    // Idempotency: the mobile offline-sync fallback retries this endpoint with the same
+    // client-generated id if it never received the previous response. Without this check,
+    // a retried request creates a duplicate PatientProfile under a new id and the original
+    // local-only record on the device never gets marked as synced.
+    if (id) {
+      const existing = await prisma.patientProfile.findUnique({ where: { id } });
+      if (existing) {
+        return res.status(200).json({ message: 'Patient profile already exists', patient: existing });
+      }
+    }
 
     const patient = await prisma.patientProfile.create({
       data: {
+        ...(id && { id }),
         firstName,
         lastName,
         dateOfBirth: new Date(dateOfBirth),

@@ -208,6 +208,11 @@ export const processSyncQueue = async (): Promise<void> => {
             if (res?.patient) {
               await upsertPatient(res.patient, false);
             }
+            // Always flip the local record (keyed by the original client id) to synced,
+            // regardless of what id the server response carries.
+            if (item.entityId) {
+              await markPatientSynced(item.entityId);
+            }
             await removeQueueItem(item.clientSyncId);
           } else if (item.operation === 'CREATE_VISIT') {
             await createVisitApi(item.payload);

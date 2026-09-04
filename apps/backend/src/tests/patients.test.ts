@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { v4 as uuidv4 } from 'uuid';
 import app from '../app';
 import prisma from '../core/db/prisma';
 
@@ -54,5 +55,36 @@ describe('Patients API RBAC & Endpoints', () => {
 
     const searchRes = await request(app).get('/api/patients/search?q=Test').set('Authorization', `Bearer ${ashaToken}`);
     expect(searchRes.status).not.toBe(403);
+  });
+
+  it('should idempotently create a patient when the mobile offline-sync fallback retries with the same client id', async () => {
+    if (!ashaToken) return;
+
+    const facility = await prisma.facility.create({
+      data: { name: 'Retry Fallback Facility', type: 'PHC', location: 'Test' },
+    });
+
+    const clientId = uuidv4();
+    const body = {
+      id: clientId,
+      firstName: 'Offline',
+      lastName: 'Retry',
+      dateOfBirth: '1992-02-02',
+      gender: 'FEMALE',
+      facilityId: facility.id,
+    };
+
+    // Simulates the device never receiving the first response and retrying the
+    // POST /api/patients fallback call with the same locally-generated id.
+    const first = await request(app).post('/api/patients').set('Authorization', `Bearer ${ashaToken}`).send(body);
+    expect(first.status).toBe(201);
+    expect(first.body.patient.id).toBe(clientId);
+
+    const retry = await request(app).post('/api/patients').set('Authorization', `Bearer ${ashaToken}`).send(body);
+    expect(retry.status).toBe(200);
+    expect(retry.body.patient.id).toBe(clientId);
+
+    const patientsInDb = await prisma.patientProfile.findMany({ where: { id: clientId } });
+    expect(patientsInDb).toHaveLength(1);
   });
 });

@@ -33,8 +33,12 @@ export const enqueueSyncItem = async (params: {
 
 export const getPendingOrFailedQueueItems = async (): Promise<SyncQueueItem[]> => {
   const db = await getDatabase();
+  // Includes 'SYNCING' as well: if the app is killed or crashes mid-sync (common on
+  // low-end devices with flaky rural connectivity), an item can be left stuck in
+  // SYNCING forever. Without retrying it here, it would never be picked up again by
+  // any future auto-sync, periodic sync, or manual "Force Sync Now" attempt.
   const rows = await db.getAllAsync<any>(
-    `SELECT * FROM sync_queue WHERE status IN ('PENDING', 'FAILED') ORDER BY createdAt ASC;`
+    `SELECT * FROM sync_queue WHERE status IN ('PENDING', 'FAILED', 'SYNCING') ORDER BY createdAt ASC;`
   );
 
   return rows.map((r) => ({
