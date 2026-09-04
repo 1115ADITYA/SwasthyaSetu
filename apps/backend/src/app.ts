@@ -7,7 +7,9 @@ import patientRoutes from './modules/patients/patients.routes';
 import visitRoutes from './modules/visits/visits.routes';
 import syncRoutes from './modules/sync/sync.routes';
 
-dotenv.config();
+import path from 'path';
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 

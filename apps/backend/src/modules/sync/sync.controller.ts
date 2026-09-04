@@ -4,7 +4,7 @@ import prisma from '../../core/db/prisma';
 import { SyncRequest, SyncItemResult } from '@swasthyasetu/shared-types';
 
 const vitalsSchema = z.object({
-  temperature: z.number().min(25).max(45).optional(),
+  temperature: z.number().min(25).max(115).optional(),
   systolic: z.number().min(50).max(300).optional(),
   diastolic: z.number().min(30).max(200).optional(),
   heartRate: z.number().min(20).max(250).optional(),
