@@ -14,6 +14,7 @@ export const searchPatientsApi = async (query: string): Promise<Patient[]> => {
 };
 
 export const createPatientApi = async (data: {
+  id?: string;
   firstName: string;
   lastName: string;
   dateOfBirth: string;

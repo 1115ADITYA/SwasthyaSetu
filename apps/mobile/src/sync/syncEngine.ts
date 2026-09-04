@@ -7,7 +7,7 @@ import {
   getPendingQueueCount,
 } from '../db/syncQueue.repo';
 import { insertLocalVisit } from '../db/visits.repo';
-import { upsertPatient } from '../db/patients.repo';
+import { upsertPatient, markPatientSynced } from '../db/patients.repo';
 import { pushSyncBatchApi } from '../api/sync.api';
 import { createPatientApi } from '../api/patients.api';
 import { createVisitApi } from '../api/visits.api';
@@ -172,16 +172,26 @@ export const processSyncQueue = async (): Promise<void> => {
       if (syncResult?.results && Array.isArray(syncResult.results)) {
         for (const res of syncResult.results) {
           if (res.status === 'success' || res.status === 'duplicate') {
+            const originalItem = queueItems.find(q => q.clientSyncId === res.clientSyncId);
+            if (originalItem && originalItem.operation === 'REGISTER_PATIENT' && originalItem.entityId) {
+              await markPatientSynced(originalItem.entityId);
+            }
             await removeQueueItem(res.clientSyncId);
           } else {
-            await updateQueueItemStatus(res.clientSyncId, 'FAILED', res.message || 'Sync failed');
+            const errorMsg = (res as any).error || res.message || 'Sync failed';
+            await updateQueueItemStatus(res.clientSyncId, 'FAILED', errorMsg);
           }
+          await syncStore.refreshPendingCount(); // Update immediately per item
         }
       } else {
         // If backend returned 200 without itemized results, mark all processed items clean
         for (const item of queueItems) {
+          if (item.operation === 'REGISTER_PATIENT' && item.entityId) {
+            await markPatientSynced(item.entityId);
+          }
           await removeQueueItem(item.clientSyncId);
         }
+        await syncStore.refreshPendingCount();
       }
 
       syncStore.setSyncResult(true);
@@ -194,7 +204,7 @@ export const processSyncQueue = async (): Promise<void> => {
           await updateQueueItemStatus(item.clientSyncId, 'SYNCING');
 
           if (item.operation === 'REGISTER_PATIENT') {
-            const res = await createPatientApi(item.payload);
+            const res = await createPatientApi({ ...item.payload, id: item.entityId });
             if (res?.patient) {
               await upsertPatient(res.patient, false);
             }
@@ -211,6 +221,7 @@ export const processSyncQueue = async (): Promise<void> => {
           console.error(`[SyncEngine] Failed syncing item ${item.clientSyncId}:`, errMsg);
           await updateQueueItemStatus(item.clientSyncId, 'FAILED', errMsg);
         }
+        await syncStore.refreshPendingCount(); // Update immediately per fallback item
       }
 
       syncStore.setSyncResult(true);
@@ -245,6 +256,16 @@ export const initSyncEngine = () => {
     }
   });
 
+  // Subscribe to auth changes to trigger sync immediately on login
+  const unsubscribeAuth = useAuthStore.subscribe((state, prevState) => {
+    if (state.isAuthenticated && !prevState.isAuthenticated) {
+      if (useSyncStore.getState().isOnline) {
+        console.log('[SyncEngine] User logged in! Triggering auto-sync...');
+        processSyncQueue().catch((e) => console.warn('[SyncEngine] Auth-sync caught:', e));
+      }
+    }
+  });
+
   // Periodic interval runner when online
   if (syncTimer) clearInterval(syncTimer);
   syncTimer = setInterval(() => {
@@ -257,6 +278,7 @@ export const initSyncEngine = () => {
 
   return () => {
     unsubscribe();
+    unsubscribeAuth();
     if (syncTimer) clearInterval(syncTimer);
   };
 };

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme';
 
 interface HeaderProps {
@@ -8,8 +9,10 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ title, subtitle }) => {
+  const insets = useSafeAreaInsets();
+  
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
     </View>
@@ -18,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({ title, subtitle }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 16,
+    paddingBottom: 16,
     paddingHorizontal: 20,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,

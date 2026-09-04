@@ -133,3 +133,8 @@ export const getPatientById = async (id: string): Promise<Patient | null> => {
     updatedAt: row.updatedAt,
   };
 };
+
+export const markPatientSynced = async (id: string): Promise<void> => {
+  const db = await getDatabase();
+  await db.runAsync(`UPDATE patients SET isLocalOnly = 0 WHERE id = ?;`, [id]);
+};

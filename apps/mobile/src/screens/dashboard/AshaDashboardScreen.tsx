@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppStackParamList, Patient, Visit } from '../../types';
 import { Button, Card, Header, SyncBadge } from '../../components';
 import { colors } from '../../theme';
@@ -26,7 +26,7 @@ export const AshaDashboardScreen: React.FC<Props> = ({ navigation }) => {
   const [recentPatients, setRecentPatients] = useState<Patient[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { phoneNumber, role, logout } = useAuthStore();
+  const { phoneNumber, role, logout, isAuthenticated } = useAuthStore();
   const { isOnline, isSyncing, pendingCount, refreshPendingCount } = useSyncStore();
 
   const loadDashboardData = useCallback(async () => {
@@ -151,17 +151,27 @@ export const AshaDashboardScreen: React.FC<Props> = ({ navigation }) => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.syncCardTitle}>Offline Records Queued</Text>
                 <Text style={styles.syncCardSubtitle}>
-                  {isOnline
-                    ? 'Internet is available. Push queued data to server.'
-                    : 'Records saved securely on device. Will auto-sync when online.'}
+                  {!isOnline
+                    ? 'Offline records saved. They will sync when internet is available.'
+                    : isAuthenticated
+                    ? 'Queued records are ready to sync.'
+                    : 'Login to sync queued records.'}
                 </Text>
               </View>
               {isOnline ? (
                 <Button
-                  title={isSyncing ? 'Syncing...' : 'Sync Now'}
-                  loading={isSyncing}
+                  title={isAuthenticated ? (isSyncing ? 'Syncing...' : 'Sync Now') : 'Login to Sync'}
+                  loading={isSyncing && isAuthenticated}
                   variant="primary"
-                  onPress={handleManualSync}
+                  onPress={
+                    isAuthenticated
+                      ? handleManualSync
+                      : () => {
+                          // The easiest way to force a re-login in this app architecture is to logout
+                          // which takes the user back to the AuthStack.
+                          logout();
+                        }
+                  }
                   style={styles.syncNowButton}
                 />
               ) : null}
