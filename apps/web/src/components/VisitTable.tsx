@@ -1,4 +1,32 @@
-import { HealthVisit } from '../data/mockData';
+export interface Vitals {
+  temperature: number;
+  systolic: number;
+  diastolic: number;
+  heartRate: number;
+  spO2: number;
+  respiratoryRate: number;
+  weight: number;
+}
+
+export interface Symptom {
+  name: string;
+  severity: 'MILD' | 'MODERATE' | 'SEVERE';
+  durationDays: number;
+  notes?: string;
+}
+
+export interface HealthVisit {
+  id: string;
+  patientId: string;
+  patientName?: string;
+  ashaId: string;
+  ashaName?: string;
+  date: string;
+  reason: string;
+  status: 'COMPLETED' | 'PENDING_REVIEW';
+  vitals: Vitals;
+  symptoms: Symptom[];
+}
 import StatusBadge from './StatusBadge';
 
 interface VisitTableProps {

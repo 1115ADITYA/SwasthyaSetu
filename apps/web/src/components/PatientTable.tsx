@@ -1,4 +1,11 @@
-import { Patient } from '../data/mockData';
+export interface Patient {
+  id: string;
+  name: string;
+  age: number | string;
+  gender: string;
+  location: string;
+  riskLevel: string;
+}
 import StatusBadge from './StatusBadge';
 
 interface PatientTableProps {

@@ -1,14 +1,13 @@
-import { MOCK_VISITS } from '../data/mockData';
 import StatusBadge from '../components/StatusBadge';
 
 interface VisitDetailsPageProps {
-  visitId: string;
+  visitId?: string;
   visitData?: any;
   onNavigate: (route: string, params?: any) => void;
 }
 
-const VisitDetailsPage = ({ visitId, visitData, onNavigate }: VisitDetailsPageProps) => {
-  const visit = visitData || MOCK_VISITS.find(v => v.id === visitId);
+const VisitDetailsPage = ({ visitData, onNavigate }: VisitDetailsPageProps) => {
+  const visit = visitData;
   
   if (!visit) {
     return (

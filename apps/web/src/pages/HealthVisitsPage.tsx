@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import VisitTable from '../components/VisitTable';
+import VisitTable, { HealthVisit } from '../components/VisitTable';
 import SearchBar from '../components/SearchBar';
-import { MOCK_VISITS } from '../data/mockData';
 
 interface HealthVisitsPageProps {
   onNavigate: (route: string, params?: any) => void;
@@ -11,7 +10,10 @@ const HealthVisitsPage = ({ onNavigate }: HealthVisitsPageProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
-  const filteredVisits = MOCK_VISITS.filter(visit => {
+  const [visits] = useState<HealthVisit[]>([]);
+  const [error] = useState<string | null>('Backend API for health visits is not yet implemented.');
+
+  const filteredVisits = visits.filter(visit => {
     const matchesSearch = visit.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           visit.ashaName?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'ALL' || visit.status === filterStatus;
@@ -45,6 +47,11 @@ const HealthVisitsPage = ({ onNavigate }: HealthVisitsPageProps) => {
       </div>
 
       <div className="flex-1">
+        {error && (
+          <div className="bg-orange-50 text-orange-700 p-4 rounded-xl mb-4 text-sm border border-orange-200">
+            {error}
+          </div>
+        )}
         <VisitTable 
           visits={filteredVisits} 
           onViewDetails={(id) => onNavigate('visit-details', { id })} 
