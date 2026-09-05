@@ -15,7 +15,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as DecodedToken;
-    req.user = decoded;
+    (req as any).user = decoded;
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired token' });
@@ -24,7 +24,8 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
 
 export const authorize = (roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    const user = (req as any).user;
+    if (!user || !roles.includes(user.role)) {
       return res.status(403).json({ message: 'Access denied: insufficient permissions' });
     }
     next();
