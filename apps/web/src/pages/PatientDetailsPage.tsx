@@ -1,173 +1,208 @@
 import { useState, useEffect } from 'react';
-import StatusBadge from '../components/StatusBadge';
-import VisitTable from '../components/VisitTable';
 import { apiClient } from '../api/client';
 
 interface PatientDetailsPageProps {
   patientId: string;
-  patientData?: any;
+  patientData?: any; // Optional: pre-loaded from nav state (faster initial render)
   onNavigate: (route: string, params?: any) => void;
 }
 
-const PatientDetailsPage = ({ patientId, patientData, onNavigate }: PatientDetailsPageProps) => {
-  const [visits, setVisits] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+interface BackendPatient {
+  id: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  gender: string;
+  abhaId?: string;
+  facilityId: string;
+  facility?: { id: string; name: string; location: string; type: string };
+  createdAt: string;
+}
+
+const PatientDetailsPage = ({ patientId, patientData: navData, onNavigate }: PatientDetailsPageProps) => {
+  const [patient, setPatient] = useState<BackendPatient | null>(navData ?? null);
+  const [isLoading, setIsLoading] = useState(!navData);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchVisits = async () => {
+    // Always fetch fresh data from the backend to ensure accuracy,
+    // even if navData is pre-populated (it may lack facility join).
+    const fetchPatient = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        // Using ONLY the existing GET /api/visits/patient/:patientId API
-        const response = await apiClient.get(`/api/visits/patient/${patientId}`);
-        
-        // Map backend format to UI expected format
-        const mappedVisits = response.visits.map((visit: any) => ({
-          id: visit.id,
-          patientId: visit.patientId,
-          patientName: patientData?.name || 'Unknown',
-          ashaId: visit.recordedById,
-          // ASHA Name is not returned by the backend, only phoneNumber and role
-          ashaName: visit.recordedBy?.phoneNumber ? `User (${visit.recordedBy.phoneNumber})` : 'Unknown',
-          date: visit.createdAt,
-          // Reason is not explicitly a backend field. Using notes or first symptom as fallback
-          reason: visit.notes || (visit.symptoms && visit.symptoms.length > 0 ? visit.symptoms[0].name : 'Routine Checkup'),
-          status: visit.status,
-          vitals: visit.vitals || {},
-          symptoms: visit.symptoms || []
-        }));
-        
-        setVisits(mappedVisits);
+        const data: BackendPatient = await apiClient.get(`/api/patients/${patientId}`);
+        setPatient(data);
       } catch (err: any) {
-        setError(err.message || 'Failed to load patient visits');
+        if (err.message?.includes('404') || err.message?.includes('not found')) {
+          setError('Patient not found.');
+        } else {
+          setError(err.message || 'Failed to load patient details.');
+        }
       } finally {
         setIsLoading(false);
       }
     };
-    
-    if (patientId) {
-      fetchVisits();
-    }
-  }, [patientId, patientData]);
 
-  if (!patientData) {
+    if (patientId) {
+      fetchPatient();
+    } else {
+      setError('No patient ID provided.');
+      setIsLoading(false);
+    }
+  }, [patientId]);
+
+  const age =
+    patient?.dateOfBirth && !isNaN(new Date(patient.dateOfBirth).getTime())
+      ? new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()
+      : 'Unknown';
+
+  const formattedDob = patient?.dateOfBirth
+    ? new Date(patient.dateOfBirth).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+    : '—';
+
+  const registeredOn = patient?.createdAt
+    ? new Date(patient.createdAt).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+    : '—';
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error || !patient) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl text-slate-600">Patient details unavailable</h2>
-        <p className="text-sm text-slate-500 mt-2">Please navigate from the Patients list to load demographics.</p>
-        <button onClick={() => onNavigate('patients')} className="mt-4 text-blue-600 hover:underline">Return to Patients</button>
+        <svg className="w-12 h-12 text-slate-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h2 className="text-xl font-semibold text-slate-700">
+          {error ?? 'Patient details unavailable'}
+        </h2>
+        <p className="text-sm text-slate-500 mt-2">
+          {!error && 'Please navigate from the Patients list.'}
+        </p>
+        <button
+          onClick={() => onNavigate('patients')}
+          className="mt-4 text-blue-600 hover:underline text-sm"
+        >
+          ← Return to Patients
+        </button>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 max-w-5xl">
-      {/* Header & Back Button */}
+      {/* Header */}
       <div>
-        <button 
+        <button
           onClick={() => onNavigate('patients')}
           className="flex items-center text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4"
         >
-          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
           Back to Patients
         </button>
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{patientData.name}</h1>
-            <p className="text-slate-500 mt-1">Patient ID: {patientData.id}</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              {patient.firstName} {patient.lastName}
+            </h1>
+            <p className="text-slate-500 mt-1 text-sm">Patient ID: {patient.id}</p>
           </div>
-          <StatusBadge status={patientData.riskLevel || 'UNKNOWN'} />
+          {patient.abhaId && (
+            <span className="text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded">
+              ABHA: {patient.abhaId}
+            </span>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Demographics Card */}
+        {/* Demographics */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 col-span-1">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Demographics</h3>
+          <h3 className="text-base font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">
+            Demographics
+          </h3>
           <dl className="space-y-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-slate-500">Age</dt>
-              <dd className="font-medium text-slate-900">{patientData.age} years</dd>
+              <dd className="font-medium text-slate-900">{age} years</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Date of Birth</dt>
+              <dd className="font-medium text-slate-900">{formattedDob}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Gender</dt>
-              <dd className="font-medium text-slate-900">{patientData.gender}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Contact</dt>
-              <dd className="font-medium text-slate-900">{patientData.contact}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Location</dt>
-              <dd className="font-medium text-slate-900 text-right max-w-[150px] truncate" title={patientData.location}>{patientData.location}</dd>
+              <dd className="font-medium text-slate-900">{patient.gender}</dd>
             </div>
             <div className="flex justify-between border-t border-slate-100 pt-3 mt-3">
-              <dt className="text-slate-500">System Status</dt>
-              <dd><StatusBadge status={patientData.status || 'ACTIVE'} /></dd>
+              <dt className="text-slate-500">Registered On</dt>
+              <dd className="font-medium text-slate-900">{registeredOn}</dd>
             </div>
           </dl>
         </div>
 
-        {/* Latest Vitals Summary */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 col-span-1 md:col-span-2 flex flex-col justify-center">
-           <h3 className="text-lg font-semibold text-slate-800 mb-4">Latest Vitals Overview</h3>
-           
-           {isLoading ? (
-             <div className="flex justify-center items-center py-8">
-               <div className="text-slate-500">Loading vitals...</div>
-             </div>
-           ) : error ? (
-             <div className="flex justify-center items-center py-8">
-               <div className="text-red-500">Failed to load vitals.</div>
-             </div>
-           ) : visits.length > 0 && visits[0].vitals && Object.keys(visits[0].vitals).length > 0 ? (
-             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="p-4 bg-slate-50 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Blood Pressure</div>
-                  <div className="font-semibold text-slate-900">
-                    {visits[0].vitals.systolic || '-'}/{visits[0].vitals.diastolic || '-'}
-                  </div>
-                </div>
-                <div className="p-4 bg-slate-50 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Heart Rate</div>
-                  <div className="font-semibold text-slate-900">{visits[0].vitals.heartRate || '-'} bpm</div>
-                </div>
-                <div className="p-4 bg-slate-50 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Temperature</div>
-                  <div className="font-semibold text-slate-900">{visits[0].vitals.temperature || '-'}°C</div>
-                </div>
-                <div className="p-4 bg-slate-50 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">SpO2</div>
-                  <div className="font-semibold text-slate-900">{visits[0].vitals.spO2 || '-'}%</div>
-                </div>
-             </div>
-           ) : (
-             <p className="text-slate-500 italic">No vitals recorded yet.</p>
-           )}
+        {/* Facility Info */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 col-span-1 md:col-span-2">
+          <h3 className="text-base font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">
+            Assigned Facility
+          </h3>
+          {patient.facility ? (
+            <dl className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-slate-500">Facility Name</dt>
+                <dd className="font-medium text-slate-900">{patient.facility.name}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-slate-500">Type</dt>
+                <dd className="font-medium text-slate-900">{patient.facility.type}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-slate-500">Location</dt>
+                <dd className="font-medium text-slate-900 text-right max-w-[220px]">
+                  {patient.facility.location}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-slate-500 text-sm italic">
+              Facility information not available.
+            </p>
+          )}
         </div>
       </div>
 
-      {/* History */}
-      <div>
-        {isLoading ? (
-          <div className="bg-white shadow-sm border border-slate-200 rounded-xl p-8 text-center text-slate-500">
-            Loading visit history...
+      {/* Visit History — Phase 2 */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="text-base font-semibold text-slate-800 mb-2">Visit History</h3>
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-amber-800">Phase 2 Feature</p>
+            <p className="text-sm text-amber-700 mt-1">
+              Visit history will be available once the ASHA offline sync module is deployed.
+              The Visit, Vitals, and Symptom data models are planned for Phase 2 and are not
+              yet active in this deployment.
+            </p>
           </div>
-        ) : error ? (
-          <div className="bg-white shadow-sm border border-slate-200 rounded-xl p-8 text-center text-red-500">
-            {error}
-          </div>
-        ) : (
-          <VisitTable 
-            visits={visits} 
-            title="Visit History"
-            onViewDetails={(id) => {
-              const selectedVisit = visits.find(v => v.id === id);
-              onNavigate('visit-details', { id, visitData: selectedVisit });
-            }}
-          />
-        )}
+        </div>
       </div>
     </div>
   );

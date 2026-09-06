@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import authRoutes from './modules/auth/auth.routes';
 import patientRoutes from './modules/patients/patients.routes';
+import facilityRoutes from './modules/facilities/facilities.routes';
+import statsRoutes from './modules/stats/stats.routes';
 
 dotenv.config();
 
@@ -16,6 +18,8 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
+app.use('/api/facilities', facilityRoutes);
+app.use('/api/stats', statsRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });

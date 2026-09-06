@@ -42,8 +42,26 @@ export const createPatient = async (req: Request, res: Response) => {
 
 export const getPatients = async (req: Request, res: Response) => {
   try {
-    const patients = await prisma.patientProfile.findMany();
+    const patients = await prisma.patientProfile.findMany({
+      include: { facility: true },
+    });
     res.status(200).json(patients);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+export const getPatientById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const patient = await prisma.patientProfile.findUnique({
+      where: { id: id as string },
+      include: { facility: true },
+    });
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
+    res.status(200).json(patient);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
   }
@@ -91,6 +109,7 @@ export const searchPatient = async (req: Request, res: Response) => {
           { abhaId: { contains: searchQuery, mode: 'insensitive' } }
         ]
       },
+      include: { facility: true },
     });
     res.status(200).json(patients);
   } catch (error) {

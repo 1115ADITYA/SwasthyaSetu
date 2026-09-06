@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiClient } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -8,12 +9,13 @@ interface HeaderProps {
 }
 
 const Header = ({ toggleSidebar, pageTitle, onNavigate }: HeaderProps) => {
+  const { role } = useAuth();
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  
   const [patientsList, setPatientsList] = useState<any[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
 
   // Notification State
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -32,30 +34,30 @@ const Header = ({ toggleSidebar, pageTitle, onNavigate }: HeaderProps) => {
     }
   ];
 
-  // Fetch patients for search
-  useEffect(() => {
-    const fetchPatients = async () => {
-      try {
-        const data = await apiClient.get('/api/patients');
-        const mapped = data.map((p: any) => ({
-          id: p.id,
-          name: `${p.firstName} ${p.lastName}`,
-          location: 'N/A' // Not returned by backend
-        }));
-        setPatientsList(mapped);
-      } catch (err) {
-        console.error("Failed to load patients for search", err);
-      }
-    };
-    fetchPatients();
+  // Backend-powered search for header
+  const searchPatients = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setPatientsList([]);
+      return;
+    }
+    try {
+      setIsSearchLoading(true);
+      const data = await apiClient.get(`/api/patients/search?q=${encodeURIComponent(query)}`);
+      const mapped = data.map((p: any) => ({
+        id: p.id,
+        name: `${p.firstName} ${p.lastName}`,
+        facility: p.facility?.name ?? 'Unknown facility',
+      }));
+      setPatientsList(mapped);
+    } catch (err) {
+      console.error('Header search failed', err);
+      setPatientsList([]);
+    } finally {
+      setIsSearchLoading(false);
+    }
   }, []);
 
-  // Search Logic (Frontend filter over fetched data)
-  const filteredPatients = patientsList.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    p.id.toLowerCase().includes(searchQuery.toLowerCase())
-  ).slice(0, 3);
-
+  const filteredPatients = patientsList.slice(0, 5);
   const hasSearchResults = filteredPatients.length > 0;
 
   // Click outside handlers
@@ -116,6 +118,7 @@ const Header = ({ toggleSidebar, pageTitle, onNavigate }: HeaderProps) => {
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setIsSearchOpen(true);
+              searchPatients(e.target.value);
             }}
             onFocus={() => {
               if (searchQuery.trim() !== '') setIsSearchOpen(true);
@@ -133,31 +136,31 @@ const Header = ({ toggleSidebar, pageTitle, onNavigate }: HeaderProps) => {
           {/* Search Dropdown */}
           {isSearchOpen && searchQuery.trim() !== '' && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg overflow-hidden z-50 max-h-96 overflow-y-auto">
-              {!hasSearchResults ? (
+              {isSearchLoading ? (
+                <div className="p-4 text-sm text-slate-500 text-center">Searching…</div>
+              ) : !hasSearchResults ? (
                 <div className="p-4 text-sm text-slate-500 text-center">No patients found for "{searchQuery}"</div>
               ) : (
                 <div className="py-2">
-                  <div className="mb-2">
-                    <div className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50">Patients</div>
-                    <ul>
-                      {filteredPatients.map(p => (
-                        <li key={p.id}>
-                          <button 
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                            onClick={() => { 
-                               setIsSearchOpen(false); 
-                               // We route to PatientDetailsPage. 
-                               // The user will see a fallback if we don't pass patientData, but since we're pulling from our local patientsList, we can pass it!
-                               onNavigate('patient-details', { id: p.id, patientData: p }); 
-                            }}
-                          >
-                            <div className="font-medium">{p.name}</div>
-                            <div className="text-xs text-slate-500">ID: {p.id}</div>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <div className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-50">Patients</div>
+                  <ul>
+                    {filteredPatients.map(p => (
+                      <li key={p.id}>
+                        <button
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                          onClick={() => {
+                            setIsSearchOpen(false);
+                            setSearchQuery('');
+                            // PatientDetailsPage will fetch full details via GET /api/patients/:id
+                            onNavigate('patient-details', { id: p.id });
+                          }}
+                        >
+                          <div className="font-medium">{p.name}</div>
+                          <div className="text-xs text-slate-500">{p.facility}</div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
@@ -216,18 +219,17 @@ const Header = ({ toggleSidebar, pageTitle, onNavigate }: HeaderProps) => {
           )}
         </div>
 
-        {/* Profile Dropdown Toggle */}
+        {/* Profile — shows real role from JWT */}
         <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
           <div className="flex flex-col items-end hidden lg:flex">
-            <span className="text-sm font-medium text-slate-700 leading-none">System User</span>
-            <span className="text-xs text-slate-500 mt-1">Authorized</span>
+            <span className="text-sm font-medium text-slate-700 leading-none">
+              {role === 'ADMIN' ? 'District Admin' : role === 'DOCTOR' ? 'Doctor' : role ?? 'User'}
+            </span>
+            <span className="text-xs text-slate-500 mt-1">{role}</span>
           </div>
-          <button className="flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-shadow">
-            <span className="sr-only">Open user menu</span>
-            <div className="w-9 h-9 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-sm shadow-sm">
-              SU
-            </div>
-          </button>
+          <div className="w-9 h-9 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-sm shadow-sm">
+            {role ? role.charAt(0) : 'U'}
+          </div>
         </div>
       </div>
     </header>
