@@ -42,7 +42,16 @@ export const createPatient = async (req: Request, res: Response) => {
 
 export const getPatients = async (req: Request, res: Response) => {
   try {
+    const user = req.user!;
+    // DOCTOR: scoped to their own facility only.
+    // ADMIN / ASHA: district-wide, no filter.
+    const facilityFilter =
+      user.role === 'DOCTOR'
+        ? { facilityId: user.facilityId ?? undefined }
+        : {};
+
     const patients = await prisma.patientProfile.findMany({
+      where: facilityFilter,
       include: { facility: true },
     });
     res.status(200).json(patients);
@@ -54,13 +63,23 @@ export const getPatients = async (req: Request, res: Response) => {
 export const getPatientById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const user = req.user!;
+
     const patient = await prisma.patientProfile.findUnique({
       where: { id: id as string },
       include: { facility: true },
     });
+
     if (!patient) {
       return res.status(404).json({ message: 'Patient not found' });
     }
+
+    // DOCTOR: cross-facility access returns 404 (not 403) to avoid leaking
+    // that a patient with this ID exists in another facility.
+    if (user.role === 'DOCTOR' && patient.facilityId !== user.facilityId) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
+
     res.status(200).json(patient);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
@@ -100,15 +119,26 @@ export const searchPatient = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Search query required' });
     }
     const searchQuery = q as string;
+    const user = req.user!;
+
+    // Build the text-match OR clause
+    const textFilter = {
+      OR: [
+        { firstName: { contains: searchQuery, mode: 'insensitive' as const } },
+        { lastName: { contains: searchQuery, mode: 'insensitive' as const } },
+        { abhaId: { contains: searchQuery, mode: 'insensitive' as const } },
+      ],
+    };
+
+    // DOCTOR: intersect with facility scope.
+    // ADMIN / ASHA: district-wide search.
+    const whereClause =
+      user.role === 'DOCTOR'
+        ? { AND: [{ facilityId: user.facilityId ?? undefined }, textFilter] }
+        : textFilter;
 
     const patients = await prisma.patientProfile.findMany({
-      where: {
-        OR: [
-          { firstName: { contains: searchQuery, mode: 'insensitive' } },
-          { lastName: { contains: searchQuery, mode: 'insensitive' } },
-          { abhaId: { contains: searchQuery, mode: 'insensitive' } }
-        ]
-      },
+      where: whereClause,
       include: { facility: true },
     });
     res.status(200).json(patients);
@@ -116,4 +146,3 @@ export const searchPatient = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error', error });
   }
 };
-
