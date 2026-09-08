@@ -1,16 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../db/prisma';
+import { DecodedToken } from '../../types/decoded-token';
 
 interface JwtPayload {
   userId: string;
   role: string;
-}
-
-export interface DecodedToken {
-  userId: string;
-  role: string;
-  facilityId: string | null;
 }
 
 export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
