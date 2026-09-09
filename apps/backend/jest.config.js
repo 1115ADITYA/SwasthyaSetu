@@ -6,4 +6,10 @@ module.exports = {
   verbose: true,
   forceExit: true,
   clearMocks: true,
+  transform: {
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      { tsconfig: 'tsconfig.test.json' },
+    ],
+  },
 };

@@ -6,6 +6,7 @@ import authRoutes from './modules/auth/auth.routes';
 import patientRoutes from './modules/patients/patients.routes';
 import facilityRoutes from './modules/facilities/facilities.routes';
 import statsRoutes from './modules/stats/stats.routes';
+import syncRoutes from './modules/sync/sync.routes';
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/facilities', facilityRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/sync', syncRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
