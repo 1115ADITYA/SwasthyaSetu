@@ -25,15 +25,19 @@ const DashboardPage = ({ onNavigate }: DashboardPageProps) => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
+  const [visitCount, setVisitCount] = useState<number | null>(null);
+  const [referralCount, setReferralCount] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Fetch patients and stats in parallel
-        const [patientsData, statsData] = await Promise.allSettled([
+        // Fetch patients, stats, visit count, and referral count in parallel
+        const [patientsData, statsData, visitsData, referralsData] = await Promise.allSettled([
           apiClient.get('/api/patients'),
           apiClient.get('/api/stats'),
+          apiClient.get('/api/visits?limit=1'),
+          apiClient.get('/api/referrals'),
         ]);
 
         if (patientsData.status === 'fulfilled') {
@@ -54,6 +58,14 @@ const DashboardPage = ({ onNavigate }: DashboardPageProps) => {
           setStats(statsData.value);
         } else {
           setStatsError('Stats unavailable for this role.');
+        }
+
+        if (visitsData.status === 'fulfilled') {
+          setVisitCount(visitsData.value?.meta?.total ?? null);
+        }
+
+        if (referralsData.status === 'fulfilled') {
+          setReferralCount(Array.isArray(referralsData.value) ? referralsData.value.length : null);
         }
       } catch (err) {
         console.error('Dashboard fetch error', err);
@@ -103,27 +115,27 @@ const DashboardPage = ({ onNavigate }: DashboardPageProps) => {
         />
         <StatCard
           title="Health Visits"
-          value="Phase 2"
-          subtitle="Sync module not yet active"
+          value={isLoading ? '…' : visitCount != null ? visitCount : '—'}
+          subtitle={visitCount != null ? 'Field visits synced' : 'Visits data unavailable'}
           icon={
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
             </svg>
           }
           trend="neutral"
-          trendValue="Planned"
+          trendValue="Live"
         />
         <StatCard
           title="Referrals"
-          value="Phase 2"
-          subtitle="Referral module not yet active"
+          value={isLoading ? '…' : referralCount != null ? referralCount : '—'}
+          subtitle={referralCount != null ? 'Active referrals' : 'Referral data unavailable'}
           icon={
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           }
           trend="neutral"
-          trendValue="Planned"
+          trendValue="Live"
         />
       </div>
 

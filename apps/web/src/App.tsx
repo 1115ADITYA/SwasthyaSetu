@@ -3,6 +3,7 @@ import DashboardLayout from './components/DashboardLayout';
 import DashboardPage from './pages/DashboardPage';
 import PatientsPage from './pages/PatientsPage';
 import HealthVisitsPage from './pages/HealthVisitsPage';
+import VisitDetailsPage from './pages/VisitDetailsPage';
 import PatientDetailsPage from './pages/PatientDetailsPage';
 import SettingsPage from './pages/SettingsPage';
 
@@ -84,6 +85,13 @@ function AppContent() {
         );
       case 'visits':
         return <HealthVisitsPage onNavigate={handleNavigate} />;
+      case 'visit-details':
+        return (
+          <VisitDetailsPage
+            visitId={routeParams.id}
+            onNavigate={handleNavigate}
+          />
+        );
       case 'settings':
         return <SettingsPage />;
       default:

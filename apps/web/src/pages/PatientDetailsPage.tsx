@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
+import StatusBadge from '../components/StatusBadge';
 
 interface PatientDetailsPageProps {
   patientId: string;
@@ -19,10 +20,25 @@ interface BackendPatient {
   createdAt: string;
 }
 
+interface PatientVisit {
+  id: string;
+  visitDate: string;
+  reason: string;
+  status: string;
+  facility?: { id: string; name: string } | null;
+  vitals?: any | null;
+  symptoms?: any[];
+}
+
 const PatientDetailsPage = ({ patientId, patientData: navData, onNavigate }: PatientDetailsPageProps) => {
   const [patient, setPatient] = useState<BackendPatient | null>(navData ?? null);
   const [isLoading, setIsLoading] = useState(!navData);
   const [error, setError] = useState<string | null>(null);
+
+  // Visit history state
+  const [visits, setVisits] = useState<PatientVisit[]>([]);
+  const [visitsLoading, setVisitsLoading] = useState(true);
+  const [visitsError, setVisitsError] = useState<string | null>(null);
 
   useEffect(() => {
     // Always fetch fresh data from the backend to ensure accuracy,
@@ -50,6 +66,26 @@ const PatientDetailsPage = ({ patientId, patientData: navData, onNavigate }: Pat
       setError('No patient ID provided.');
       setIsLoading(false);
     }
+  }, [patientId]);
+
+  // Fetch visit history in parallel with patient details
+  useEffect(() => {
+    if (!patientId) return;
+
+    const fetchVisits = async () => {
+      setVisitsLoading(true);
+      setVisitsError(null);
+      try {
+        const data: PatientVisit[] = await apiClient.get(`/api/patients/${patientId}/visits`);
+        setVisits(data);
+      } catch (err: any) {
+        setVisitsError(err.message || 'Failed to load visit history.');
+      } finally {
+        setVisitsLoading(false);
+      }
+    };
+
+    fetchVisits();
   }, [patientId]);
 
   const age =
@@ -187,22 +223,77 @@ const PatientDetailsPage = ({ patientId, patientData: navData, onNavigate }: Pat
         </div>
       </div>
 
-      {/* Visit History — Phase 2 */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-base font-semibold text-slate-800 mb-2">Visit History</h3>
-        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <p className="text-sm font-medium text-amber-800">Phase 2 Feature</p>
-            <p className="text-sm text-amber-700 mt-1">
-              Visit history will be available once the ASHA offline sync module is deployed.
-              The Visit, Vitals, and Symptom data models are planned for Phase 2 and are not
-              yet active in this deployment.
-            </p>
-          </div>
+      {/* Visit History — live from GET /api/patients/:id/visits */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+          <h3 className="text-base font-semibold text-slate-800">Visit History</h3>
+          {!visitsLoading && !visitsError && visits.length > 0 && (
+            <span className="text-xs text-slate-500">
+              {visits.length} visit{visits.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
+
+        {visitsLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          </div>
+        )}
+
+        {!visitsLoading && visitsError && (
+          <div className="px-6 py-8 text-center text-sm text-rose-600">
+            {visitsError}
+          </div>
+        )}
+
+        {!visitsLoading && !visitsError && visits.length === 0 && (
+          <div className="px-6 py-10 text-center text-slate-500 text-sm">
+            No visits recorded for this patient yet.
+          </div>
+        )}
+
+        {!visitsLoading && !visitsError && visits.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600 min-w-[600px]">
+              <thead className="bg-white text-slate-500 text-xs uppercase font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-4 whitespace-nowrap">Date</th>
+                  <th className="px-6 py-4 whitespace-nowrap">Reason</th>
+                  <th className="px-6 py-4 whitespace-nowrap">Facility</th>
+                  <th className="px-6 py-4 whitespace-nowrap">Status</th>
+                  <th className="px-6 py-4 whitespace-nowrap text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visits.map((v) => (
+                  <tr key={v.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {new Date(v.visitDate).toLocaleDateString('en-IN')}
+                    </td>
+                    <td className="px-6 py-4 truncate max-w-[200px]" title={v.reason}>
+                      {v.reason}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {v.facility?.name ?? '—'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <StatusBadge status={v.status} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        id={`patient-visit-view-${v.id}`}
+                        onClick={() => onNavigate('visit-details', { id: v.id })}
+                        className="text-blue-600 hover:text-blue-900 group-hover:underline text-sm font-medium"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
