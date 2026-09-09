@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../../core/middlewares/auth.middleware';
-import { getVisits, getVisitById } from './visits.controller';
+import { getVisits, getVisitById, createConsultation } from './visits.controller';
 
 const router = Router();
 
@@ -11,5 +11,8 @@ router.use(authenticate);
 // Only DOCTOR (facility-scoped) and ADMIN (district-wide)
 router.get('/',    authorize(['DOCTOR', 'ADMIN']), getVisits);
 router.get('/:id', authorize(['DOCTOR', 'ADMIN']), getVisitById);
+
+// Consultation — DOCTOR only
+router.post('/:id/consultation', authorize(['DOCTOR']), createConsultation);
 
 export default router;

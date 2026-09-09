@@ -190,3 +190,97 @@ export const getPatientVisits = async (req: Request, res: Response): Promise<voi
   }
 };
 
+// ---------------------------------------------------------------------------
+// POST /api/visits/:id/consultation
+// ---------------------------------------------------------------------------
+
+/**
+ * Create (or finalise) a consultation for a visit.
+ *
+ * State machine (runs atomically inside $transaction):
+ *   PENDING_REVIEW  → auto-promote to IN_REVIEW, then immediately create
+ *                     the consultation and transition to COMPLETED.
+ *   IN_REVIEW       → create consultation and transition to COMPLETED.
+ *   COMPLETED       → 422 (consultation already exists).
+ *   CANCELLED       → 422 (visit is closed).
+ *
+ * DOCTOR only. Doctor must be facility-scoped to the visit's facility.
+ * doctorId is always taken from the authenticated user — never from the body.
+ */
+export const createConsultation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const visitId  = req.params['id'] as string;
+    const doctorId = req.user!.userId;
+    const facilityId = req.user!.facilityId;
+
+    // Validate payload
+    const { diagnosis, notes, treatment, prescription } = req.body ?? {};
+    if (!diagnosis || typeof diagnosis !== 'string' || diagnosis.trim() === '') {
+      res.status(400).json({ message: 'diagnosis is required' });
+      return;
+    }
+
+    // Fetch visit (no include needed — we only need scalar fields)
+    const visit = await prisma.visit.findUnique({ where: { id: visitId } });
+    if (!visit) {
+      res.status(404).json({ message: 'Visit not found' });
+      return;
+    }
+
+    // Facility scope check
+    if (facilityId !== null && visit.facilityId !== facilityId) {
+      res.status(404).json({ message: 'Visit not found' });
+      return;
+    }
+
+    // State gate — COMPLETED and CANCELLED are terminal
+    if (visit.status === 'COMPLETED') {
+      res.status(422).json({ message: 'Consultation already exists for this visit' });
+      return;
+    }
+    if (visit.status === 'CANCELLED') {
+      res.status(422).json({ message: 'Cannot create a consultation for a cancelled visit' });
+      return;
+    }
+
+    // At this point status is PENDING_REVIEW or IN_REVIEW.
+    // The entire state promotion + consultation creation + COMPLETED transition
+    // is done atomically so no concurrent request can race us.
+    const result = await prisma.$transaction(async (tx) => {
+      // If still PENDING_REVIEW, promote to IN_REVIEW first
+      if (visit.status === 'PENDING_REVIEW') {
+        await tx.visit.update({
+          where: { id: visitId },
+          data:  { status: 'IN_REVIEW' },
+        });
+      }
+
+      // Create the consultation
+      const consultation = await tx.consultation.create({
+        data: {
+          visitId,
+          doctorId,
+          diagnosis:    diagnosis.trim(),
+          notes:        typeof notes    === 'string' ? notes    : undefined,
+          treatment:    typeof treatment === 'string' ? treatment : undefined,
+          prescription: typeof prescription === 'string' ? prescription : undefined,
+        },
+      });
+
+      // Transition visit to COMPLETED and stamp doctorId
+      const updatedVisit = await tx.visit.update({
+        where: { id: visitId },
+        data:  { status: 'COMPLETED', doctorId },
+        include: { consultation: true },
+      });
+
+      return { visit: updatedVisit, consultation };
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+
