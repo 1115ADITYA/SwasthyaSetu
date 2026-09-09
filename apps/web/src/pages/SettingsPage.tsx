@@ -1,4 +1,20 @@
+import { useAuth } from '../context/AuthContext';
+
+/**
+ * SettingsPage — Profile Information
+ *
+ * Note on profile data availability:
+ * The backend does NOT expose a GET /api/auth/me (or equivalent) endpoint in
+ * the current Phase 2 implementation. The login response returns only { token,
+ * role }, which is what the AuthContext stores. Phone number, name, and
+ * facility information are not available client-side without a new backend
+ * endpoint. The "Role" field is populated from real auth data; all other
+ * profile fields are displayed as unavailable until an /api/auth/me endpoint
+ * is added in a future phase.
+ */
 const SettingsPage = () => {
+  const { role } = useAuth();
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
@@ -12,20 +28,45 @@ const SettingsPage = () => {
         </div>
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-              <input type="text" disabled defaultValue="Dr. Sarah Jenkins" className="block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm bg-slate-50 text-slate-500 sm:text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-              <input type="email" disabled defaultValue="sarah.jenkins@swasthyasetu.org" className="block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm bg-slate-50 text-slate-500 sm:text-sm" />
-            </div>
+            {/* Role — real value from auth */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-              <input type="text" disabled defaultValue="Chief Medical Officer" className="block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm bg-slate-50 text-slate-500 sm:text-sm" />
+              <input
+                type="text"
+                disabled
+                value={role ?? '—'}
+                className="block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm bg-slate-50 text-slate-700 font-medium sm:text-sm"
+              />
+            </div>
+            {/* Phone number — not available without /api/auth/me */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+              <input
+                type="text"
+                disabled
+                value="Not available"
+                className="block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm bg-slate-50 text-slate-400 italic sm:text-sm"
+              />
             </div>
           </div>
-          <p className="text-sm text-slate-500">To update your profile information, please contact the system administrator.</p>
+
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4 mt-2">
+            <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-amber-800">Limited profile data</p>
+              <p className="text-sm text-amber-700 mt-1">
+                The backend does not currently expose a <code className="font-mono text-xs bg-amber-100 px-1 rounded">GET /api/auth/me</code> endpoint.
+                Only your <strong>Role</strong> is available from the login session.
+                Full profile details (name, phone, facility) will be shown once that endpoint is added.
+              </p>
+            </div>
+          </div>
+
+          <p className="text-sm text-slate-500">
+            To update your profile information, please contact the system administrator.
+          </p>
         </div>
       </div>
 
