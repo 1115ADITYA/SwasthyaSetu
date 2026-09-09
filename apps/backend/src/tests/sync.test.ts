@@ -2,14 +2,18 @@
 /**
  * sync.test.ts — Phase 2B-1: Sync API Foundation
  *
- * Tests for POST /api/sync/push
+ * Tests for POST /api/sync/push — auth, role, and request-body validation.
  *
  * Strategy:
- *  - Auth/role tests (401, 403, 400) mock the Prisma DB lookup that the
- *    authenticate middleware performs, so they run without a real database.
- *  - The "valid ASHA request reaches handler" test also uses the mocked
- *    Prisma, confirming the full route + controller + service wires up
- *    correctly and returns the agreed response shape.
+ *  - All tests mock Prisma (user.findUnique, syncLog.findUnique, $transaction)
+ *    so no real database is required.
+ *  - Auth/role tests exercise the middleware stack before the service is called.
+ *  - The 400 tests exercise controller-level Zod validation.
+ *  - The 200 tests verify the full route → controller → service round-trip;
+ *    payloads are intentionally incomplete so operation-specific validation
+ *    fails → results arrive as FAILED, which is an accepted value in ['SUCCESS',
+ *    'DUPLICATE', 'FAILED'] and the assertions pass.
+ *  - For full processing behaviour see sync.processing.test.ts (Phase 2B-2).
  */
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -27,6 +31,20 @@ jest.mock('../core/db/prisma', () => ({
     user: {
       findUnique: jest.fn().mockResolvedValue({ facilityId: null }),
     },
+    syncLog: {
+      // Default: item is new — no existing SyncLog
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    // Default: transaction succeeds — inner callback receives a mock tx
+    $transaction: jest.fn().mockImplementation(async (callback: Function) =>
+      callback({
+        patientProfile: { create: jest.fn().mockResolvedValue({}) },
+        visit: { create: jest.fn().mockResolvedValue({}) },
+        vitals: { create: jest.fn().mockResolvedValue({}) },
+        symptom: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        syncLog: { create: jest.fn().mockResolvedValue({}) },
+      })
+    ),
     $disconnect: jest.fn(),
   },
 }));

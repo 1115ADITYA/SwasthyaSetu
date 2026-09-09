@@ -15,7 +15,7 @@ import { processSyncBatch } from './sync.service';
  *   403  — handled by authorize middleware (non-ASHA role)
  */
 export const syncPush = async (req: Request, res: Response): Promise<void> => {
-  // Validate the request body
+  // Validate the request body (outer shape: items array, item fields, operation enum)
   const validation = syncPushBodySchema.safeParse(req.body);
   if (!validation.success) {
     res.status(400).json({
@@ -26,11 +26,14 @@ export const syncPush = async (req: Request, res: Response): Promise<void> => {
   }
 
   const { items } = validation.data;
+
+  // ashaId and ashaFacilityId come from the authoritative DB lookup performed
+  // by the authenticate middleware — the client cannot inject or spoof these.
   const ashaId = req.user!.userId;
+  const ashaFacilityId = req.user!.facilityId;
 
-  // Delegate to the service layer (Phase 2B-2 will fill this in)
-  const results = await processSyncBatch(items, ashaId);
+  const results = await processSyncBatch(items, ashaId, ashaFacilityId);
 
-  // 200 for any authenticated valid batch — individual item status is inside results[]
+  // 200 for any authenticated valid batch — per-item status is inside results[]
   res.status(200).json({ results });
 };
