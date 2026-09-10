@@ -18,17 +18,19 @@ import { queueLocalPatientRegistration } from '../../sync/syncEngine';
 import { createPatientApi } from '../../api/patients.api';
 import { upsertPatient } from '../../db/patients.repo';
 import { useSyncStore } from '../../store/syncStore';
+import { useAuthStore } from '../../store/authStore';
 import { ENV } from '../../config/env';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PatientRegistration'>;
 
 export const PatientRegistrationScreen: React.FC<Props> = ({ navigation }) => {
+  const authFacilityId = useAuthStore(s => s.facilityId);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dob, setDob] = useState('1990-05-15');
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>('FEMALE');
   const [abhaId, setAbhaId] = useState('');
-  const [facilityId, setFacilityId] = useState(ENV.DEFAULT_FACILITY_ID);
+  const [facilityId, setFacilityId] = useState(authFacilityId || ENV.DEFAULT_FACILITY_ID);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -47,6 +49,9 @@ export const PatientRegistrationScreen: React.FC<Props> = ({ navigation }) => {
       errs.dob = 'Date of birth is required';
     } else if (isNaN(Date.parse(dob.trim()))) {
       errs.dob = 'Invalid date format. Use YYYY-MM-DD (e.g. 1990-05-15)';
+    }
+    if (!facilityId.trim()) {
+      errs.facilityId = 'Assigned Facility ID is required';
     }
 
     setErrors(errs);
@@ -169,10 +174,11 @@ export const PatientRegistrationScreen: React.FC<Props> = ({ navigation }) => {
             />
 
             <Input
-              label="Assigned Facility ID"
+              label="Assigned Facility ID *"
               placeholder="e.g. phc-pune-01"
               value={facilityId}
               onChangeText={setFacilityId}
+              error={errors.facilityId}
             />
 
             <Button

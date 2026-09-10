@@ -51,17 +51,7 @@ describe('Auth API', () => {
     }
   });
 
-  it('should rate limit multiple login attempts', async () => {
-    // Make 6 requests, 6th should fail with 429
-    let lastRes;
-    for (let i = 0; i < 6; i++) {
-      lastRes = await request(app).post('/api/auth/login').send({
-        phoneNumber: 'dummy',
-        password: 'dummy'
-      });
-    }
-    expect(lastRes?.status).toBe(429); // Too Many Requests
-  });
+
 
   it('login response includes real facilityId for a user with an assigned facility', async () => {
     // Create a facility then an ASHA user linked to it
@@ -107,5 +97,17 @@ describe('Auth API', () => {
     // Cleanup
     await prisma.user.delete({ where: { phoneNumber: ashaPhone } });
     await prisma.facility.delete({ where: { id: facility.id } });
+  });
+
+  it('should rate limit multiple login attempts', async () => {
+    // Make 6 requests, 6th should fail with 429
+    let lastRes;
+    for (let i = 0; i < 6; i++) {
+      lastRes = await request(app).post('/api/auth/login').send({
+        phoneNumber: 'dummy',
+        password: 'dummy'
+      });
+    }
+    expect(lastRes?.status).toBe(429); // Too Many Requests
   });
 });

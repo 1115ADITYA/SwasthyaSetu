@@ -31,7 +31,16 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     moduleName === 'react-native' ||
     moduleName.startsWith('react-native/') ||
     moduleName === 'scheduler' ||
-    moduleName.startsWith('scheduler/')
+    moduleName.startsWith('scheduler/') ||
+    // Pin safe-area-context and screens to the mobile workspace copy (4.10.5 / 3.31.1).
+    // Without this, @react-navigation/elements resolves react-native-safe-area-context
+    // from root node_modules (5.9.1), causing a duplicate RNCSafeAreaProvider
+    // native-view registration crash on device ("Tried to register two views with
+    // the same name RNCSafeAreaProvider").
+    moduleName === 'react-native-safe-area-context' ||
+    moduleName.startsWith('react-native-safe-area-context/') ||
+    moduleName === 'react-native-screens' ||
+    moduleName.startsWith('react-native-screens/')
   ) {
     try {
       const resolved = require.resolve(moduleName, { paths: [mobileNodeModules] });

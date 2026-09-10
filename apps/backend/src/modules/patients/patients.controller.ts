@@ -36,6 +36,7 @@ export const createPatient = async (req: Request, res: Response) => {
 
     res.status(201).json({ message: 'Patient profile created', patient });
   } catch (error) {
+    console.error('[patients.controller] createPatient error:', error);
     res.status(500).json({ message: 'Server error', error });
   }
 };
