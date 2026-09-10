@@ -25,10 +25,40 @@ export const generateUUID = (): string => {
   });
 };
 
+// ---------------------------------------------------------------------------
+// Status normalisation helper
+//
+// The claude-aditya-web backend returns UPPERCASE status values:
+//   SUCCESS | DUPLICATE | FAILED
+//
+// The older mobile-fix backend returned lowercase:
+//   success | duplicate | failed
+//
+// We normalise to uppercase so the check is backend-version-agnostic.
+// ---------------------------------------------------------------------------
+const normStatus = (s: string): string => (s ?? '').toUpperCase();
+
 let syncTimer: NodeJS.Timeout | null = null;
 
+// ---------------------------------------------------------------------------
+// queueLocalVisit
+//
+// Creates a local SQLite visit record and enqueues a CREATE_VISIT item
+// for background sync.
+//
+// The payload now includes the three fields required by the backend:
+//   - facilityId  (from the ASHA's assigned facility)
+//   - visitDate   (ISO timestamp of capture)
+//   - reason      (brief clinical reason — entered by ASHA in the UI)
+//
+// Temperature must be passed in CELSIUS because the web dashboard displays
+// the stored value as °C.  CaptureVisitScreen is responsible for the
+// F→C conversion before calling this function.
+// ---------------------------------------------------------------------------
 export const queueLocalVisit = async (visitInput: {
   patientId: string;
+  facilityId: string;  // Required — ASHA's assigned facility UUID
+  reason: string;       // Required — brief clinical reason
   notes?: string;
   vitals: any;
   symptoms: any[];
@@ -41,7 +71,8 @@ export const queueLocalVisit = async (visitInput: {
   const visit: Visit = {
     id: visitId,
     patientId: visitInput.patientId,
-    status: visitInput.status || 'COMPLETED',
+    facilityId: visitInput.facilityId,
+    status: visitInput.status || 'PENDING_REVIEW',
     notes: visitInput.notes,
     vitals: visitInput.vitals,
     symptoms: visitInput.symptoms,
@@ -60,6 +91,9 @@ export const queueLocalVisit = async (visitInput: {
     entityId: visitId,
     payload: {
       patientId: visitInput.patientId,
+      facilityId: visitInput.facilityId,
+      visitDate: now,
+      reason: visitInput.reason,
       status: visit.status,
       notes: visitInput.notes || '',
       vitals: visitInput.vitals,
@@ -156,7 +190,7 @@ export const processSyncQueue = async (): Promise<void> => {
 
     console.log(`[SyncEngine] Processing ${queueItems.length} queued sync item(s)...`);
 
-    // Attempt batched sync first via POST /api/sync
+    // Attempt batched sync first via POST /api/sync/push
     try {
       const batchPayload = queueItems.map((item) => ({
         clientSyncId: item.clientSyncId,
@@ -168,23 +202,29 @@ export const processSyncQueue = async (): Promise<void> => {
 
       const syncResult = await pushSyncBatchApi(batchPayload);
 
-      // Process per-item results from backend
+      // Process per-item results from backend.
+      // The claude-aditya-web backend returns UPPERCASE status values:
+      //   SUCCESS | DUPLICATE | FAILED
+      // We normalise with normStatus() for backward compatibility.
       if (syncResult?.results && Array.isArray(syncResult.results)) {
         for (const res of syncResult.results) {
-          if (res.status === 'success' || res.status === 'duplicate') {
+          const status = normStatus(res.status);
+
+          if (status === 'SUCCESS' || status === 'DUPLICATE') {
             const originalItem = queueItems.find(q => q.clientSyncId === res.clientSyncId);
             if (originalItem && originalItem.operation === 'REGISTER_PATIENT' && originalItem.entityId) {
               await markPatientSynced(originalItem.entityId);
             }
             await removeQueueItem(res.clientSyncId);
           } else {
+            // FAILED
             const errorMsg = (res as any).error || res.message || 'Sync failed';
             await updateQueueItemStatus(res.clientSyncId, 'FAILED', errorMsg);
           }
           await syncStore.refreshPendingCount(); // Update immediately per item
         }
       } else {
-        // If backend returned 200 without itemized results, mark all processed items clean
+        // Backend returned 200 without itemised results — mark all processed items clean
         for (const item of queueItems) {
           if (item.operation === 'REGISTER_PATIENT' && item.entityId) {
             await markPatientSynced(item.entityId);
@@ -196,8 +236,8 @@ export const processSyncQueue = async (): Promise<void> => {
 
       syncStore.setSyncResult(true);
     } catch (batchError: any) {
-      // Fallback: If /api/sync endpoint is not yet mounted on backend, sync per-item using direct resource endpoints
-      console.warn('[SyncEngine] Batched /api/sync failed, trying individual item fallback:', batchError?.message);
+      // Fallback: If /api/sync/push is unreachable, sync per-item using direct resource endpoints
+      console.warn('[SyncEngine] Batched /api/sync/push failed, trying individual item fallback:', batchError?.message);
 
       for (const item of queueItems) {
         try {
@@ -262,7 +302,7 @@ export const initSyncEngine = () => {
   });
 
   // Subscribe to auth changes to trigger sync immediately on login
-  const unsubscribeAuth = useAuthStore.subscribe((state, prevState) => {
+  const unsubscribeAuth = useAuthStore.subscribe((state: any, prevState: any) => {
     if (state.isAuthenticated && !prevState.isAuthenticated) {
       if (useSyncStore.getState().isOnline) {
         console.log('[SyncEngine] User logged in! Triggering auto-sync...');

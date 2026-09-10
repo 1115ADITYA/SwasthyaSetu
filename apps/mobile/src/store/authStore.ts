@@ -7,10 +7,11 @@ interface AuthState {
   role: Role | null;
   phoneNumber: string | null;
   userId: string | null;
+  facilityId: string | null;  // ASHA's assigned facility UUID (null until backend exposes it)
   isAuthenticated: boolean;
   isLoading: boolean;
 
-  setAuth: (data: { token: string; role: Role; phoneNumber?: string; userId?: string }) => Promise<void>;
+  setAuth: (data: { token: string; role: Role; phoneNumber?: string; userId?: string; facilityId?: string }) => Promise<void>;
   logout: () => Promise<void>;
   loadSavedAuth: () => Promise<void>;
 }
@@ -22,24 +23,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   role: null,
   phoneNumber: null,
   userId: null,
+  facilityId: null,
   isAuthenticated: false,
   isLoading: true,
 
-  setAuth: async ({ token, role, phoneNumber, userId }) => {
+  setAuth: async ({ token, role, phoneNumber, userId, facilityId }) => {
     try {
-      const sessionData = { token, role, phoneNumber, userId };
+      const sessionData = { token, role, phoneNumber, userId, facilityId };
       await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sessionData));
       set({
         token,
         role,
         phoneNumber: phoneNumber || null,
         userId: userId || null,
+        facilityId: facilityId || null,
         isAuthenticated: true,
         isLoading: false,
       });
     } catch (e) {
       console.error('[AuthStore] Error saving auth session:', e);
-      set({ token, role, phoneNumber: phoneNumber || null, userId: userId || null, isAuthenticated: true, isLoading: false });
+      set({ token, role, phoneNumber: phoneNumber || null, userId: userId || null, facilityId: facilityId || null, isAuthenticated: true, isLoading: false });
     }
   },
 
@@ -54,6 +57,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       role: null,
       phoneNumber: null,
       userId: null,
+      facilityId: null,
       isAuthenticated: false,
       isLoading: false,
     });
@@ -70,6 +74,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             role: parsed.role,
             phoneNumber: parsed.phoneNumber || null,
             userId: parsed.userId || null,
+            facilityId: parsed.facilityId || null,
             isAuthenticated: true,
             isLoading: false,
           });

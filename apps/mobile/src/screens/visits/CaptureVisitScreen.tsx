@@ -16,6 +16,7 @@ import { Button, Card, Header, Input, Select, SyncBadge } from '../../components
 import { colors } from '../../theme';
 import { queueLocalVisit } from '../../sync/syncEngine';
 import { useSyncStore } from '../../store/syncStore';
+import { useAuthStore } from '../../store/authStore';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'CaptureVisit'>;
 
@@ -37,8 +38,11 @@ const PRESET_SYMPTOMS = [
 export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
   const { patientId, patientName } = route.params;
 
-  // Vitals State
-  const [temp, setTemp] = useState('98.6');
+  // Auth — for authenticated ASHA's facilityId
+  const { facilityId: ashaFacilityId } = useAuthStore();
+
+  // Vitals State (temperature in °C — stored and displayed as Celsius)
+  const [temp, setTemp] = useState('37.0');
   const [systolic, setSystolic] = useState('120');
   const [diastolic, setDiastolic] = useState('80');
   const [heartRate, setHeartRate] = useState('72');
@@ -55,6 +59,9 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
   const [customSymptomName, setCustomSymptomName] = useState('');
   const [currentSeverity, setCurrentSeverity] = useState<'MILD' | 'MODERATE' | 'SEVERE'>('MILD');
   const [currentDuration, setCurrentDuration] = useState('2');
+
+  // Clinical reason (required by backend)
+  const [reason, setReason] = useState('');
 
   // General Notes
   const [notes, setNotes] = useState('');
@@ -111,8 +118,8 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
   const getTempStatus = () => {
     const val = parseFloat(temp);
     if (!val) return null;
-    if (val >= 102) return { label: '🚨 High Fever (≥102°F)', color: colors.danger };
-    if (val > 99) return { label: '⚠️ Mild Fever (>99°F)', color: colors.accent };
+    if (val >= 38.9) return { label: '🚨 High Fever (≥38.9°C)', color: colors.danger };
+    if (val > 37.5) return { label: '⚠️ Mild Fever (>37.5°C)', color: colors.accent };
     return { label: '✓ Normal Temp', color: colors.success };
   };
 
@@ -121,6 +128,21 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
   const tempStatus = getTempStatus();
 
   const handleSubmitVisit = async () => {
+    // Validate required reason
+    if (!reason.trim()) {
+      Alert.alert('Validation Error', 'Please enter the reason for this visit.');
+      return;
+    }
+
+    // Validate facilityId — must be a valid UUID from the ASHA's account
+    if (!ashaFacilityId || !ashaFacilityId.trim()) {
+      Alert.alert(
+        'Facility Not Set',
+        'Your account does not have an assigned facility. Please log in again or contact your administrator.',
+      );
+      return;
+    }
+
     const numTemp = parseFloat(temp);
     const numSys = parseInt(systolic, 10);
     const numDia = parseInt(diastolic, 10);
@@ -148,6 +170,7 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
 
     setLoading(true);
 
+    // Temperature is now entered and stored in °C
     const vitalsPayload: Vitals = {
       temperature: isNaN(numTemp) ? undefined : numTemp,
       systolic: isNaN(numSys) ? undefined : numSys,
@@ -161,7 +184,10 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
     try {
       await queueLocalVisit({
         patientId,
-        status: 'COMPLETED',
+        facilityId: ashaFacilityId.trim(),
+        reason: reason.trim(),
+        // PENDING_REVIEW — allows the Doctor to review and add consultation
+        status: 'PENDING_REVIEW',
         notes: notes.trim(),
         vitals: vitalsPayload,
         symptoms,
@@ -263,8 +289,8 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
 
             <View style={styles.row}>
               <Input
-                label="Temperature (°F)"
-                placeholder="98.6"
+                label="Temperature (°C)"
+                placeholder="37.0"
                 keyboardType="numeric"
                 value={temp}
                 onChangeText={setTemp}
@@ -347,9 +373,15 @@ export const CaptureVisitScreen: React.FC<Props> = ({ route, navigation }) => {
             ))}
           </Card>
 
-          {/* Section 3: Notes */}
+          {/* Section 3: Reason & Notes */}
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>3. Field Worker Notes & Referral</Text>
+            <Text style={styles.sectionTitle}>3. Visit Reason & Notes</Text>
+            <Input
+              label="Reason for Visit *"
+              placeholder="e.g. Fever and cough for 3 days"
+              value={reason}
+              onChangeText={setReason}
+            />
             <Input
               label="Observations / Advice Given"
               placeholder="Enter guidance provided, medicine reminders, or PHC referral advice..."
