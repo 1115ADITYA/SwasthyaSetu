@@ -43,6 +43,11 @@ describe('Auth API', () => {
     if (res.status === 200) {
       expect(res.body).toHaveProperty('token');
       expect(res.body.role).toBe('PATIENT');
+      // userId and facilityId must always be present in the response
+      expect(res.body).toHaveProperty('userId');
+      expect(res.body).toHaveProperty('facilityId');
+      // PATIENT has no facility — must be null
+      expect(res.body.facilityId).toBeNull();
     }
   });
 
@@ -56,5 +61,51 @@ describe('Auth API', () => {
       });
     }
     expect(lastRes?.status).toBe(429); // Too Many Requests
+  });
+
+  it('login response includes real facilityId for a user with an assigned facility', async () => {
+    // Create a facility then an ASHA user linked to it
+    let facility: any;
+    let ashaPhone: string;
+
+    try {
+      facility = await prisma.facility.create({
+        data: { name: 'Auth Test PHC', type: 'PHC', location: 'Auth District' },
+      });
+    } catch {
+      // DB not available — skip gracefully
+      return;
+    }
+
+    ashaPhone = `+91${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+
+    // Register ASHA
+    const regRes = await request(app).post('/api/auth/register').send({
+      phoneNumber: ashaPhone,
+      password: 'securepassword123',
+      role: 'ASHA',
+    });
+    if (regRes.status !== 201) return; // DB unavailable
+
+    // Assign facilityId directly via Prisma (registration endpoint doesn't accept it)
+    await prisma.user.update({
+      where: { phoneNumber: ashaPhone },
+      data: { facilityId: facility.id },
+    });
+
+    // Login and verify facilityId is returned
+    const loginRes = await request(app).post('/api/auth/login').send({
+      phoneNumber: ashaPhone,
+      password: 'securepassword123',
+    });
+
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body).toHaveProperty('facilityId', facility.id);
+    expect(loginRes.body).toHaveProperty('userId');
+    expect(loginRes.body).toHaveProperty('role', 'ASHA');
+
+    // Cleanup
+    await prisma.user.delete({ where: { phoneNumber: ashaPhone } });
+    await prisma.facility.delete({ where: { id: facility.id } });
   });
 });
