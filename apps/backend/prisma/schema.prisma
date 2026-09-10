@@ -15,97 +15,202 @@ enum Role {
 }
 
 model User {
-  id             String          @id @default(uuid())
-  phoneNumber    String          @unique
-  passwordHash   String
-  role           Role            @default(PATIENT)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id           String   @id @default(uuid())
+  phoneNumber  String   @unique
+  passwordHash String
+  role         Role     @default(PATIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   patientProfile PatientProfile?
   facilityId     String?
   facility       Facility?       @relation(fields: [facilityId], references: [id])
-  healthVisits   HealthVisit[]   @relation("RecordedBy")
-  syncReceipts   SyncReceipt[]
-}
-model Facility {
-  id          String   @id @default(uuid())
-  name        String
-  type        String   // PHC, SUB_CENTRE, DISTRICT_HOSPITAL
-  location    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  users       User[]
-  patients    PatientProfile[]
+  ashaVisits    Visit[]        @relation("VisitAsha")
+  doctorVisits  Visit[]        @relation("VisitDoctor")
+  consultations Consultation[] @relation("ConsultationDoctor")
+  referralsMade Referral[]     @relation("ReferralDoctor")
+  syncLogs      SyncLog[]
+}
+
+model Facility {
+  id        String   @id @default(uuid())
+  name      String
+  type      String // PHC, SUB_CENTRE, DISTRICT_HOSPITAL
+  location  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    User[]
+  patients PatientProfile[]
+
+  visits        Visit[]
+  referralsFrom Referral[] @relation("ReferralSource")
+  referralsTo   Referral[] @relation("ReferralDestination")
 }
 
 model PatientProfile {
-  id          String   @id @default(uuid())
-  userId      String?  @unique
-  user        User?    @relation(fields: [userId], references: [id])
-  
+  id     String  @id @default(uuid())
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
   firstName   String
   lastName    String
   dateOfBirth DateTime
   gender      String
   abhaId      String?  @unique
-  
-  facilityId  String
-  facility    Facility @relation(fields: [facilityId], references: [id])
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  healthVisits HealthVisit[]
+
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  visits    Visit[]
+  referrals Referral[]
 }
 
-model SyncReceipt {
-  id           String   @id @default(uuid())
-  clientSyncId String   @unique
-  userId       String
-  user         User     @relation(fields: [userId], references: [id])
-  operation    String
-  entityType   String
-  entityId     String?
-  status       String
-  processedAt  DateTime @default(now())
+enum VisitStatus {
+  PENDING_REVIEW
+  IN_REVIEW
+  COMPLETED
+  CANCELLED
 }
 
-model HealthVisit {
-  id           String         @id @default(uuid())
-  patientId    String
-  patient      PatientProfile @relation(fields: [patientId], references: [id])
-  recordedById String
-  recordedBy   User           @relation("RecordedBy", fields: [recordedById], references: [id])
-  status       String
-  notes        String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+enum SymptomSeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+enum ReferralStatus {
+  INITIATED
+  IN_TRANSIT
+  RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum SyncOperation {
+  REGISTER_PATIENT
+  CREATE_VISIT
+}
+
+enum SyncItemStatus {
+  PENDING
+  SYNCING
+  SYNCED
+  FAILED
+}
+
+model Visit {
+  id         String         @id @default(uuid())
+  patientId  String
+  patient    PatientProfile @relation(fields: [patientId], references: [id])
+  facilityId String
+  facility   Facility       @relation(fields: [facilityId], references: [id])
+  ashaId     String
+  asha       User           @relation("VisitAsha", fields: [ashaId], references: [id])
+  doctorId   String?
+  doctor     User?          @relation("VisitDoctor", fields: [doctorId], references: [id])
+  visitDate  DateTime
+  reason     String
+  status     VisitStatus    @default(PENDING_REVIEW)
+  notes      String?
 
   vitals       Vitals?
   symptoms     Symptom[]
+  consultation Consultation?
+  referral     Referral?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([facilityId])
+  @@index([ashaId])
+  @@index([status])
+  @@index([visitDate])
 }
 
 model Vitals {
-  id              String      @id @default(uuid())
-  visitId         String      @unique
-  visit           HealthVisit @relation(fields: [visitId], references: [id])
+  id              String   @id @default(uuid())
+  visitId         String   @unique
+  visit           Visit    @relation(fields: [visitId], references: [id])
   temperature     Float?
   systolic        Int?
   diastolic       Int?
   heartRate       Int?
-  spO2            Int?
+  spO2            Float?
   respiratoryRate Int?
   weight          Float?
+  recordedAt      DateTime
+  createdAt       DateTime @default(now())
 }
 
 model Symptom {
-  id           String      @id @default(uuid())
+  id           String          @id @default(uuid())
   visitId      String
-  visit        HealthVisit @relation(fields: [visitId], references: [id])
+  visit        Visit           @relation(fields: [visitId], references: [id])
   name         String
-  severity     String
-  durationDays Int?
+  severity     SymptomSeverity
+  durationDays Int
   notes        String?
+  createdAt    DateTime        @default(now())
+
+  @@index([visitId])
+}
+
+model Consultation {
+  id           String   @id @default(uuid())
+  visitId      String   @unique
+  visit        Visit    @relation(fields: [visitId], references: [id])
+  doctorId     String
+  doctor       User     @relation("ConsultationDoctor", fields: [doctorId], references: [id])
+  diagnosis    String
+  notes        String?
+  treatment    String?
+  prescription String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([doctorId])
+}
+
+model Referral {
+  id                    String         @id @default(uuid())
+  visitId               String         @unique
+  visit                 Visit          @relation(fields: [visitId], references: [id])
+  patientId             String
+  patient               PatientProfile @relation(fields: [patientId], references: [id])
+  referringDoctorId     String
+  referringDoctor       User           @relation("ReferralDoctor", fields: [referringDoctorId], references: [id])
+  sourceFacilityId      String
+  sourceFacility        Facility       @relation("ReferralSource", fields: [sourceFacilityId], references: [id])
+  destinationFacilityId String
+  destinationFacility   Facility       @relation("ReferralDestination", fields: [destinationFacilityId], references: [id])
+  reason                String
+  status                ReferralStatus @default(INITIATED)
+  initiatedAt           DateTime       @default(now())
+  receivedAt            DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@index([patientId])
+  @@index([sourceFacilityId])
+  @@index([status])
+}
+
+model SyncLog {
+  id           String        @id @default(uuid())
+  clientSyncId String        @unique
+  operation    SyncOperation
+  entityId     String
+  ashaId       String
+  asha         User          @relation(fields: [ashaId], references: [id])
+  processedAt  DateTime      @default(now())
+
+  @@index([clientSyncId])
+  @@index([ashaId])
 }

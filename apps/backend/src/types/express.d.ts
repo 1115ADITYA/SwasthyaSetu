@@ -1,4 +1,4 @@
-import { DecodedToken } from '../core/middlewares/auth.middleware';
+import { DecodedToken } from './decoded-token';
 
 declare global {
   namespace Express {

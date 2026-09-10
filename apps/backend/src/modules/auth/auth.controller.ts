@@ -76,7 +76,12 @@ export const login = async (req: Request, res: Response) => {
       { expiresIn }
     );
 
-    res.status(200).json({ token, role: user.role });
+    res.status(200).json({
+      token,
+      role: user.role,
+      userId: user.id,
+      facilityId: user.facilityId ?? null,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
   }

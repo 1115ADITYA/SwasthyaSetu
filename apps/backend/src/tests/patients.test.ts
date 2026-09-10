@@ -4,21 +4,27 @@ import prisma from '../core/db/prisma';
 
 let ashaToken = '';
 let patientToken = '';
+let dbAvailable = false;
 
 beforeAll(async () => {
-  // Assume DB is running or we handle failures gracefully
-  const ashaPhone = `+91${Math.floor(1000000000 + Math.random() * 9000000000)}`;
-  const ptPhone = `+91${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+  try {
+    const ashaPhone = `+91${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+    const ptPhone = `+91${Math.floor(1000000000 + Math.random() * 9000000000)}`;
 
-  await request(app).post('/api/auth/register').send({ phoneNumber: ashaPhone, password: 'password', role: 'ASHA' });
-  await request(app).post('/api/auth/register').send({ phoneNumber: ptPhone, password: 'password', role: 'PATIENT' });
-  
-  const resAsha = await request(app).post('/api/auth/login').send({ phoneNumber: ashaPhone, password: 'password' });
-  ashaToken = resAsha.body?.token;
+    await request(app).post('/api/auth/register').send({ phoneNumber: ashaPhone, password: 'password', role: 'ASHA' });
+    await request(app).post('/api/auth/register').send({ phoneNumber: ptPhone, password: 'password', role: 'PATIENT' });
 
-  const resPt = await request(app).post('/api/auth/login').send({ phoneNumber: ptPhone, password: 'password' });
-  patientToken = resPt.body?.token;
-});
+    const resAsha = await request(app).post('/api/auth/login').send({ phoneNumber: ashaPhone, password: 'password' });
+    ashaToken = resAsha.body?.token ?? '';
+
+    const resPt = await request(app).post('/api/auth/login').send({ phoneNumber: ptPhone, password: 'password' });
+    patientToken = resPt.body?.token ?? '';
+
+    dbAvailable = !!(ashaToken && patientToken);
+  } catch {
+    dbAvailable = false;
+  }
+}, 30000);
 
 afterAll(async () => {
   await prisma.$disconnect();

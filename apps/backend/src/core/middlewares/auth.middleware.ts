@@ -1,12 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import prisma from '../db/prisma';
+import { DecodedToken } from '../../types/decoded-token';
 
-interface DecodedToken {
+interface JwtPayload {
   userId: string;
   role: string;
 }
 
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
@@ -14,8 +16,21 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as DecodedToken;
-    req.user = decoded;
+    const payload = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as JwtPayload;
+
+    // Authoritative DB lookup — attaches server-side facilityId to req.user.
+    // This prevents any client from injecting a fake facilityId via the token.
+    const dbUser = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { facilityId: true },
+    });
+
+    (req as any).user = {
+      userId: payload.userId,
+      role: payload.role,
+      facilityId: dbUser?.facilityId ?? null,
+    } satisfies DecodedToken;
+
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired token' });
@@ -24,7 +39,8 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
 
 export const authorize = (roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    const user = (req as any).user as DecodedToken | undefined;
+    if (!user || !roles.includes(user.role)) {
       return res.status(403).json({ message: 'Access denied: insufficient permissions' });
     }
     next();
