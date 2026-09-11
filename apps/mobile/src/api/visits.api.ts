@@ -26,6 +26,6 @@ export const createVisitApi = async (visitData: {
 };
 
 export const getPatientVisitHistoryApi = async (patientId: string): Promise<Visit[]> => {
-  const response = await apiClient.get<Visit[]>(`/api/visits/patient/${patientId}`);
+  const response = await apiClient.get<Visit[]>(`/api/patients/${patientId}/visits`);
   return response.data;
 };
