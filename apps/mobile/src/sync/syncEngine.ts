@@ -10,7 +10,6 @@ import { insertLocalVisit } from '../db/visits.repo';
 import { upsertPatient, markPatientSynced } from '../db/patients.repo';
 import { pushSyncBatchApi } from '../api/sync.api';
 import { createPatientApi } from '../api/patients.api';
-import { createVisitApi } from '../api/visits.api';
 import { useSyncStore } from '../store/syncStore';
 import { useAuthStore } from '../store/authStore';
 import { Visit, Patient, SyncQueueItem } from '../types';
@@ -255,7 +254,21 @@ export const processSyncQueue = async (): Promise<void> => {
             }
             await removeQueueItem(item.clientSyncId);
           } else if (item.operation === 'CREATE_VISIT') {
-            await createVisitApi(item.payload);
+            // POST /api/visits does not exist as a create route on this backend
+            // (only GET /, GET /:id, POST /:id/consultation). Route this item
+            // through the same /api/sync/push endpoint as a single-item batch
+            // instead of calling the non-existent createVisitApi() REST route.
+            const singleItemResult = await pushSyncBatchApi([{
+              clientSyncId: item.clientSyncId,
+              operation: item.operation,
+              entityType: item.entityType,
+              entityId: item.entityId,
+              payload: item.payload,
+            }]);
+            const itemStatus = normStatus(singleItemResult?.results?.[0]?.status);
+            if (itemStatus !== 'SUCCESS' && itemStatus !== 'DUPLICATE') {
+              throw new Error(singleItemResult?.results?.[0]?.message || 'Sync failed');
+            }
             await removeQueueItem(item.clientSyncId);
           } else {
             // Unknown operation: remove to avoid blocking
