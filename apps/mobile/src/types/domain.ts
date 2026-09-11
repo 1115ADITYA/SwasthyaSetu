@@ -76,4 +76,5 @@ export interface AuthResponse {
   token: string;
   role: Role;
   userId?: string;
+  facilityId?: string | null;
 }

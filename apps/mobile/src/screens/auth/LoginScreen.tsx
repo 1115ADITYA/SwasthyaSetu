@@ -62,6 +62,7 @@ export const LoginScreen: React.FC<Props> = () => {
         role: res.role || 'ASHA',
         phoneNumber: cleanPhone,
         userId: res.userId,
+        facilityId: res.facilityId ?? undefined,
       });
     } catch (err: any) {
       if (err.response?.status === 429) {
