@@ -181,6 +181,25 @@ describe('REGISTER_PATIENT processing', () => {
     );
   });
 
+  // Regression: real deployments use human-readable Facility.id values
+  // (e.g. "facility-phc-andheria") rather than generated UUIDs — the
+  // @default(uuid()) on Facility.id is only a default, not an enforced
+  // format. facilityId must not be rejected for being non-UUID-shaped.
+  it('accepts a non-UUID facilityId such as "facility-phc-andheria"', async () => {
+    const res = await request(app)
+      .post('/api/sync/push')
+      .set('Authorization', `Bearer ${ashaToken}`)
+      .send({ items: [regPatientItem(PATIENT_ID, SYNC_ID_1, { facilityId: 'facility-phc-andheria' })] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].status).toBe('SUCCESS');
+    expect(mockTx.patientProfile.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ facilityId: 'facility-phc-andheria' }),
+      }),
+    );
+  });
+
   // Test 3
   it('SyncLog is created inside the same transaction with correct fields', async () => {
     await request(app)
@@ -269,6 +288,26 @@ describe('CREATE_VISIT processing', () => {
     expect(mockTx.visit.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ id: VISIT_ID }),
+      }),
+    );
+  });
+
+  // Regression: same non-UUID facilityId case as REGISTER_PATIENT above.
+  // This is the exact real-device failure this test guards against:
+  // "Invalid payload: facilityId must be a valid UUID" on every
+  // CREATE_VISIT sync when the ASHA's assigned facility has a
+  // human-readable id instead of a UUID.
+  it('accepts a non-UUID facilityId such as "facility-phc-andheria"', async () => {
+    const res = await request(app)
+      .post('/api/sync/push')
+      .set('Authorization', `Bearer ${ashaToken}`)
+      .send({ items: [createVisitItem(VISIT_ID, SYNC_ID_1, PATIENT_ID, { facilityId: 'facility-phc-andheria' })] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].status).toBe('SUCCESS');
+    expect(mockTx.visit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ facilityId: 'facility-phc-andheria' }),
       }),
     );
   });

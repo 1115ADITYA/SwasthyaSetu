@@ -37,7 +37,11 @@ export const registerPatientPayloadSchema = z.object({
     .refine((d) => !isNaN(Date.parse(d)), { message: 'Invalid dateOfBirth' }),
   gender: z.string().min(1, { message: 'gender is required' }),
   abhaId: z.string().optional(),
-  facilityId: z.string().uuid({ message: 'facilityId must be a valid UUID' }),
+  // Facility.id is a plain Prisma String id (@default(uuid()) is only a default,
+  // not an enforced format — real facilities in this project can have
+  // human-readable ids, e.g. "facility-phc-andheria"). Matches the plain
+  // z.string() used for facilityId in patients.controller.ts.
+  facilityId: z.string().min(1, { message: 'facilityId is required' }),
 });
 
 // ---------------------------------------------------------------------------
@@ -67,7 +71,8 @@ export const symptomPayloadSchema = z.object({
 
 export const createVisitPayloadSchema = z.object({
   patientId: z.string().uuid({ message: 'patientId must be a valid UUID' }),
-  facilityId: z.string().uuid({ message: 'facilityId must be a valid UUID' }),
+  // See registerPatientPayloadSchema above — facilityId is not guaranteed UUID-shaped.
+  facilityId: z.string().min(1, { message: 'facilityId is required' }),
   /** Ignored at processing time — authenticated ASHA identity is always used. */
   ashaId: z.string().uuid().optional(),
   doctorId: z.string().uuid().optional(),
